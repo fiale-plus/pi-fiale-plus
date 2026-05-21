@@ -36,7 +36,7 @@ Skip: reads, small edits, one-liners.
 
 ## Config (3 fields, all optional)
 
-Defaults: `mode: auto, review: strict`
+Defaults: `mode: auto, review: light`
 
 ```json
 { "mode": "auto", "review": "strict" }

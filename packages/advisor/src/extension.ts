@@ -17,7 +17,7 @@ export interface AdvisorConfig {
 
 const DEFAULT_CONFIG: AdvisorConfig = {
   mode: "auto",
-  review: "strict",
+  review: "light",
 };
 
 const CONFIG_PATH = featureFile("advisor", "config.json");
@@ -68,7 +68,7 @@ function loadConfig(): AdvisorConfig {
   const raw = readJson<Partial<AdvisorConfig>>(CONFIG_PATH, {});
   return {
     mode: (raw.mode === "manual" || raw.mode === "off") ? raw.mode : "auto",
-    review: (raw.review === "light" || raw.review === "off") ? raw.review : "strict",
+    review: (raw.review === "strict" || raw.review === "off") ? raw.review : "light",
     model: raw.model || undefined,
   };
 }
