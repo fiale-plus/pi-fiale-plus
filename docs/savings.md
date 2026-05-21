@@ -1,8 +1,10 @@
-# Session savings with context-mode
+# Session savings with context-mode and advisor-coach
 
 Reference data from real `pi-fiale-plus` development sessions.
 
-## This session
+## context-mode savings (this session)
+
+context-mode indexes tool output into a local FTS5 database, sending only summaries to the LLM instead of full raw output.
 
 | Metric | Value |
 |---|---|
@@ -12,29 +14,15 @@ Reference data from real `pi-fiale-plus` development sessions.
 | **Tokens kept out of context** | **~30,300 (88.9% reduction)** |
 | Lifetime sessions tracked | 7 (922 events) |
 
-## Cost comparison
+### Cost: GPT-5.5 vs GPT-5.4-mini
 
-Pricing simplified: GPT-5.5 for full context, GPT-5.4-mini for what passes through context-mode.
-
-| Scenario | Input tokens | Rate | Cost |
+| Scenario | Tokens | Rate | Cost |
 |---|---|---|---|
-| Without context-mode (GPT-5.5) | ~33,250 | $15/M tokens | ~$0.50 |
-| With context-mode (GPT-5.4-mini) | ~3,675 | $3/M tokens | ~$0.01 |
+| Without context-mode (GPT-5.5) | ~33,250 | $15/M input | ~$0.50 |
+| With context-mode (GPT-5.4-mini) | ~3,675 | $3/M input | ~$0.01 |
 | **Savings per session** | | | **~$0.49 (98%)** |
 
-| Lifetime (7 sessions) | | |
-|---|---|---|
-| Without context-mode (GPT-5.5) | ~232,750 tokens | ~$3.50 |
-| With context-mode (GPT-5.4-mini) | ~25,725 tokens | ~$0.08 |
-| **Lifetime savings** | | **~$3.42** |
-
-## How it works
-
-[context-mode](https://github.com/mksglu/context-mode) indexes tool output (Bash, Read, Write, Edit, etc.) into a local FTS5 database. Instead of sending full output to the LLM, only a summary enters context — the raw data stays in the sandbox and is retrieved on demand via `ctx_search`.
-
-**88.9% context reduction** means sessions last ~9× longer before compaction kicks in.
-
-## Per-tool savings
+### Per-tool breakdown
 
 | Tool | Calls | KB saved |
 |---|---|---|
@@ -43,3 +31,80 @@ Pricing simplified: GPT-5.5 for full context, GPT-5.4-mini for what passes throu
 | `ctx_execute` | 5 | 14.5 |
 | `ctx_index` | 4 | 5.6 |
 | **Total** | **15** | **119.0** |
+
+---
+
+## Advisor-coach savings (lifetime)
+
+Advisor-coach replaces every-turn GPT-5.5 calls with a mix: GPT-5.5 only for strategic advisor/review calls, GPT-5.4-nano for everything else.
+
+### Usage stats
+
+| Metric | Value |
+|---|---|
+| Advisor calls (cached) | 52 unique |
+| Review calls (cached) | 44 unique |
+| Advisor output tokens | ~24,590 (~473 avg/call) |
+| Review output tokens | ~7,509 (~171 avg/call) |
+| Total turns in tracked sessions | 3,071 |
+| Total session IDs tracked | 7,189 |
+
+### Scenario comparison
+
+Pricing used: GPT-5.5 ($15/M in, $60/M out), GPT-5.4-nano ($1/M in, $4/M out).
+
+| Scenario | Input cost | Output cost | **Total** |
+|---|---|---|---|
+| **All on GPT-5.5** (no advisor-coach) | $23.03 | $36.85 | **$59.88** |
+| GPT-5.5 for 52 advisor calls | $0.73 | $1.93 | $2.66 |
+| GPT-5.4-nano for 3,071 baseline turns | $1.49 | $2.33 | $3.82 |
+| **With advisor-coach** | $2.22 | $4.26 | **$6.47** |
+
+**Savings: $53.41 (89.2%)** vs running everything on GPT-5.5.
+
+### What the advisor budget buys
+
+The ~$2.66 spent on GPT-5.5 advisor calls buys:
+- 52 architectural/strategic recommendations
+- 44 post-review assessments
+- Cache deduplication (identical questions don't re-fire)
+- Session-aware context (brief, recent files, errors)
+
+Without advisor-coach, every one of the 3,071 turns would pay GPT-5.5 prices regardless of whether it's a strategic decision or a mechanical edit.
+
+### How it works
+
+```
+         ┌─────────────────────────┐
+         │  User asks a question   │
+         └─────────────────────────┘
+                     │
+         ┌──────────▼──────────┐
+         │  before_agent_start  │
+         │  (preflight)         │
+         │  inject advisor      │
+         │  instructions +      │
+         │  session brief       │
+         └──────────┬──────────┘
+                    │
+         ┌──────────▼──────────┐
+         │  Agent runs on       │
+         │  GPT-5.4-nano        │
+         │  (model default)     │
+         └──────────┬──────────┘
+                    │
+         ┌──────────▼──────────┐
+         │  Advisor tool called?│
+         │  ──► GPT-5.5 for    │
+         │     strategic advice │
+         │  ──► cached? return  │
+         │     cached result    │
+         └──────────┬──────────┘
+                    │
+         ┌──────────▼──────────┐
+         │  turn_end / agent_end│
+         │  post-review on      │
+         │  GPT-5.5 (light:     │
+         │  only on changes)    │
+         └─────────────────────┘
+```
