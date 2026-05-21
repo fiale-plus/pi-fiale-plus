@@ -17,7 +17,7 @@ export interface AdvisorConfig {
 
 const DEFAULT_CONFIG: AdvisorConfig = {
   mode: "auto",
-  review: "light",
+  review: "strict",
 };
 
 const CONFIG_PATH = featureFile("advisor", "config.json");
@@ -68,7 +68,7 @@ function loadConfig(): AdvisorConfig {
   const raw = readJson<Partial<AdvisorConfig>>(CONFIG_PATH, {});
   return {
     mode: (raw.mode === "manual" || raw.mode === "off") ? raw.mode : "auto",
-    review: (raw.review === "strict" || raw.review === "off") ? raw.review : "light",
+    review: (raw.review === "light" || raw.review === "off") ? raw.review : "strict",
     model: raw.model || undefined,
   };
 }
@@ -196,10 +196,16 @@ async function askAdvisor(pi: ExtensionAPI, ctx: any, question: string, scope: s
   return { text, model: resolved.label };
 }
 
-async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: string, meta: { fileChanged: boolean; failed: boolean }) {
+async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: string, meta: { fileChanged: boolean; failed: boolean; isAgentEnd: boolean }) {
   const config = loadConfig();
   if (config.review === "off") return;
   const state = loadState();
+
+  // light: only on file changes or errors
+  // strict: also review every 3 turns + always on agent_end
+  if (config.review === "light" && !meta.fileChanged && !meta.failed) return;
+  if (config.review === "strict" && !meta.fileChanged && !meta.failed && !meta.isAgentEnd && state.turns % 3 !== 0) return;
+
   if (!delta && !meta.fileChanged && !meta.failed) return;
   const b = brief(state);
   if (!b) return;
@@ -297,7 +303,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     saveState(state);
 
     if (config.review !== "off") {
-      await doReview(pi, ctx, `turn-${state.turns}`, text, { fileChanged, failed });
+      await doReview(pi, ctx, `turn-${state.turns}`, text, { fileChanged, failed, isAgentEnd: false });
     }
   });
 
@@ -310,7 +316,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     const delta = squish(last?.content || "(none)");
     const fileChanged = msgs.some((m: any) => /(?:write|edit)/i.test(JSON.stringify(m)));
     const failed = msgs.some((m: any) => /error|fail/i.test(JSON.stringify(m)));
-    await doReview(pi, ctx, "agent-end", delta, { fileChanged, failed });
+    await doReview(pi, ctx, "agent-end", delta, { fileChanged, failed, isAgentEnd: true });
   });
 
   // ── /advisor command ───────────────────────────────────────────────────

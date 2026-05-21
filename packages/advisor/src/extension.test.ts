@@ -2,16 +2,16 @@ import { describe, it, expect } from "vitest";
 import type { AdvisorConfig } from "./extension.js";
 
 describe("AdvisorConfig", () => {
-  it("defaults to auto mode and light review with no model override", () => {
-    const cfg: AdvisorConfig = { mode: "auto", review: "light" };
+  it("defaults to auto mode and strict review with no model override", () => {
+    const cfg: AdvisorConfig = { mode: "auto", review: "strict" };
     expect(cfg.mode).toBe("auto");
-    expect(cfg.review).toBe("light");
+    expect(cfg.review).toBe("strict");
     expect(cfg.model).toBeUndefined();
   });
 
   it("accepts all 3 modes", () => {
     for (const mode of ["auto", "manual", "off"] as const) {
-      const cfg: AdvisorConfig = { mode, review: "light" };
+      const cfg: AdvisorConfig = { mode, review: "strict" };
       expect(cfg.mode).toBe(mode);
     }
   });
@@ -38,21 +38,17 @@ describe("AdvisorConfig", () => {
   });
 
   it("has exactly 3 properties (mode, review, model)", () => {
-    // Count only the interface properties, not method returns
-    const keys = Object.keys({ mode: "auto", review: "light" } as AdvisorConfig);
+    const keys = Object.keys({ mode: "auto", review: "strict" } as AdvisorConfig);
     expect(keys.length).toBeLessThanOrEqual(3);
-    // Verify no additional fields
     const allKeys = ["mode", "review", "model"];
-    const configKeys = Object.keys({ mode: "auto", review: "light" } as AdvisorConfig);
+    const configKeys = Object.keys({ mode: "auto", review: "strict" } as AdvisorConfig);
     expect(configKeys.every((k) => allKeys.includes(k))).toBe(true);
   });
 });
 
 describe("SOTA model suggestions", () => {
   it("includes gpt-5.5 as primary option", () => {
-    // The SOTA_CHAIN array should exist in the source with gpt-5.5 first
-    // We verify the config defaults to openai-codex/gpt-5.5
-    const cfg: AdvisorConfig = { mode: "auto", review: "light" };
+    const cfg: AdvisorConfig = { mode: "auto", review: "strict" };
     expect(cfg.model).toBeUndefined(); // model is optional, auto-detect
   });
 });

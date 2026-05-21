@@ -28,14 +28,16 @@ Skip: reads, small edits, one-liners.
 | `/advisor <question>` | Get immediate strategic advice |
 | `/advisor on` | Enable auto mode (preflight+post+cache) |
 | `/advisor off` | Disable |
+| `/advisor mode auto\|manual\|off` | Set advisor mode |
+| `/advisor model <provider/model>` | Set specific model (e.g. `openai-codex/gpt-5.5`) |
 | `/advisor status` | Full status with model info |
 | `/advisor config` | Show current 3-field config |
 | `/advisor review light\|strict\|off` | Set review aggressiveness |
 
 ## Config (3 fields, all optional)
 
-```json
-{ "mode": "auto", "review": "light", "model": "gpt-5.5" }
-```
+Defaults: `mode: auto, review: strict`
 
-All three can be set to sensible defaults — install and forget.
+```json
+{ "mode": "auto", "review": "strict" }
+```
