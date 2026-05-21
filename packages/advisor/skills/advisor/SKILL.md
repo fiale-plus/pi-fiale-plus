@@ -1,15 +1,43 @@
 ---
 name: advisor
-description: Session coaching and decision framing for Pi; use when you want a higher-level recommendation, tradeoff summary, or next-step plan.
+description: Zero-config strategic advisor for Pi. Auto-detects best model, preflight + post-review + cache. Use for architecture, tradeoffs, planning.
 ---
 
 # Advisor
 
-Use this skill when you need to set or inspect the current advisor focus for a session.
+Works out of the box. Just install and use `/advisor`.
 
-## Usage
+## Quick start
 
-- `/advisor` — show current note
-- `/advisor set <text>` — set the current coaching note
-- `/advisor clear` — clear it
-- `/advisor list` — recent history
+- `/advisor` — status + config
+- `/advisor <question>` — get immediate advice
+- `/advisor on|off` — enable/disable
+
+Zero config needed. Falls back through SOTA models (gpt-5.5 → claude-opus-4-6 → sonnet-4-6) automatically.
+
+## When to call
+
+Agent should call `advisor` tool before: new frameworks, refactoring, API design, concurrency, security, tradeoffs.
+Skip: reads, small edits, one-liners.
+
+## Commands
+
+| Command | What it does |
+|---------|-------------|
+| `/advisor` | Show status, config, cached note |
+| `/advisor <question>` | Get immediate strategic advice |
+| `/advisor on` | Enable auto mode (preflight+post+cache) |
+| `/advisor off` | Disable |
+| `/advisor mode auto\|manual\|off` | Set advisor mode |
+| `/advisor model <provider/model>` | Set specific model (e.g. `openai-codex/gpt-5.5`) |
+| `/advisor status` | Full status with model info |
+| `/advisor config` | Show current 3-field config |
+| `/advisor review light\|strict\|off` | Set review aggressiveness |
+
+## Config (3 fields, all optional)
+
+Defaults: `mode: auto, review: light`
+
+```json
+{ "mode": "auto", "review": "strict" }
+```
