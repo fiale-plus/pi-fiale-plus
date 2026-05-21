@@ -1,43 +1,41 @@
 ---
 name: advisor
-description: Multi-model strategic advisor with SOTA model suggestion for Pi. Use when you need architectural guidance, tradeoff evaluation, or next-step planning. Automatically suggests gpt-5.5, claude-opus-4-6, or best available model.
+description: Zero-config strategic advisor for Pi. Auto-detects best model, preflight + post-review + cache. Use for architecture, tradeoffs, planning.
 ---
 
 # Advisor
 
-This skill manages the multi-model advisor system. It provides:
-- `advisor` tool — callable by the agent for strategic questions
-- `/advisor` command — interactive configuration and notes
-- Preflight injection — prompts the agent to call advisor at decision points
-- Cache — deduplicates identical advisory requests
-- SOTA fallback — tries configured model, then best available
+Works out of the box. Just install and use `/advisor`.
 
-## When to call advisor
+## Quick start
 
-Before: new frameworks, refactoring approach, API design, concurrency models, security decisions, tradeoff evaluation.
-Skip: file reads, small edits, config tweaks, one-liners.
+- `/advisor` — status + config
+- `/advisor <question>` — get immediate advice
+- `/advisor on|off` — enable/disable
 
-Format: ask 1 concise question. Incorporate the answer.
+Zero config needed. Falls back through SOTA models (gpt-5.5 → claude-opus-4-6 → sonnet-4-6) automatically.
+
+## When to call
+
+Agent should call `advisor` tool before: new frameworks, refactoring, API design, concurrency, security, tradeoffs.
+Skip: reads, small edits, one-liners.
 
 ## Commands
 
-- `/advisor` — show current note and config
-- `/advisor set <text>` — set a coaching note (injected as context)
-- `/advisor model` — show SOTA model suggestions
-- `/advisor model <provider/model>` — set advisor model (e.g. `openai-codex/gpt-5.5`)
-- `/advisor mode tool|prompt|disabled` — set advisor mode
-- `/advisor status` — full status with SOTA suggestions
-- `/advisor clear` — clear note
-- `/advisor list` — recent note history
-- `/advisor digest` — show session brief
+| Command | What it does |
+|---------|-------------|
+| `/advisor` | Show status, config, cached note |
+| `/advisor <question>` | Get immediate strategic advice |
+| `/advisor on` | Enable auto mode (preflight+post+cache) |
+| `/advisor off` | Disable |
+| `/advisor status` | Full status with model info |
+| `/advisor config` | Show current 3-field config |
+| `/advisor review light\|strict\|off` | Set review aggressiveness |
 
-## SOTA models supported
+## Config (3 fields, all optional)
 
-| Provider/Model | Label |
-|---|---|
-| `openai-codex/gpt-5.5` | GPT-5.5 Codex |
-| `anthropic/claude-opus-4-6` | Claude Opus 4.6 |
-| `anthropic/claude-sonnet-4-6` | Claude Sonnet 4.6 |
-| `openrouter/openrouter/auto` | OpenRouter Auto |
+```json
+{ "mode": "auto", "review": "light", "model": "gpt-5.5" }
+```
 
-The advisor automatically falls back through available models if the configured one is unreachable.
+All three can be set to sensible defaults — install and forget.
