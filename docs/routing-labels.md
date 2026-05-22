@@ -55,7 +55,6 @@ The miner writes JSONL rows:
 npm run routing:mine
 npm run routing:queue
 npm run routing:autolabel
-npm run routing:gold -- --allow-partial
 npm run routing:advisor-log
 npm run routing:eval
 ```

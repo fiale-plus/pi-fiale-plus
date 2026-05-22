@@ -12,8 +12,7 @@ Generated files are ignored by git:
 - `data/routing/label-queue.md` — Obsidian-friendly review view
 - `data/routing/gold.jsonl` — final gold/model-gold set from reviewed queue rows
 - `data/routing/model-label-queue.jsonl` — model-assisted labels with provenance
-- `data/routing/advisor-router-examples.jsonl` — real advisor router decisions from local logs
-- `data/routing/advisor-router-report.json` — real-log diagnostics and trainability summary
+- `data/routing/advisor-router-examples.jsonl` — real advisor router decisions
 
 ## Build the queue
 
@@ -62,24 +61,6 @@ Better first training set:
 - 25+ rows per stable class
 - explicit `drop` examples for exit/no-op/too-short commands
 
-## Convert reviewed queue to gold
-
-If labels are manually filled in `label-queue.jsonl`:
-
-```bash
-npm run routing:gold
-npm run routing:eval -- --input data/routing/gold.jsonl
-```
-
-If manual labeling is unavailable, run a provenance-marked model-assisted pass:
-
-```bash
-npm run routing:autolabel
-npm run routing:eval -- --input data/routing/gold.jsonl
-```
-
-Use `npm run routing:gold -- --allow-partial` while labeling to get progress counts before the minimum viable set is complete.
-
 ## Mine real advisor router log
 
 ```bash
@@ -106,14 +87,21 @@ npm run routing:score
 
 This ranks `data/routing/unlabeled.jsonl` by model uncertainty and writes `data/routing/active-learning-queue.jsonl` plus a report. Use this to pull the hardest examples back into gold if manual review becomes available.
 
-## Build conservative silver data
+## Train the binary gate
 
 ```bash
-npm run routing:silver
+npm run binary:build
+npm run binary:train
 ```
 
-This keeps weak heuristic examples where the current model agrees with the heuristic label at decent confidence and margin. The result is training-only augmentation (`data/routing/silver.jsonl`), not gold truth.
+Builds the binary gate dataset from gold + Pi + Claude sessions, then trains TF-IDF + logistic regression. Model saved to `data/routing/binary-gate-model.json`.
+
+## Benchmark
+
+```bash
+npm run binary:benchmark
+```
 
 ## Training gate
 
-Train only after `gold.jsonl` exists with at least 120 validated rows. Evaluate on hand labels with macro-F1 and per-class recall. Heuristic-vs-heuristic accuracy is only a consistency check.
+Train only after gold data exists. Evaluate on held-out labels with macro-F1 and per-class recall.
