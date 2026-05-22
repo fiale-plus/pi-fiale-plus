@@ -117,7 +117,7 @@ function binaryGateFeatures(text: string, model: BinaryGateModel) {
   return { I: pairs.map(([i]) => i), V: pairs.map(([, v]) => v * scale) };
 }
 
-function binaryGatePredict(text: string): { decision: "continue" | "escalate"; confidence: number } | null {
+export function binaryGatePredict(text: string): { decision: "continue" | "escalate"; confidence: number } | null {
   const model = loadBinaryGate();
   if (!model) return null;
   const vec = binaryGateFeatures(text, model);
