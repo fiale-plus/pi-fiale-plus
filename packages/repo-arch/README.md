@@ -2,6 +2,6 @@
 
 Pi integration bridge for [repo-arch](https://github.com/fiale-plus/repo-arch), a CLI-first project-memory engine.
 
-Install: `npm install @fiale-plus/pi-repo-arch`
+Install locally from this repo root: `npm install`
 
-Requires the standalone CLI: `npm install -g @fiale-plus/repo-arch`
+Requires the standalone CLI from the sibling repo checkout (not published here yet).

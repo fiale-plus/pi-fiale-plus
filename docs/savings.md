@@ -1,4 +1,4 @@
-# Session savings with context-mode and advisor-coach
+# Session savings with context-mode and advisor
 
 Reference data from real `pi-fiale-plus` development sessions.
 
@@ -34,9 +34,9 @@ context-mode indexes tool output into a local FTS5 database, sending only summar
 
 ---
 
-## Advisor-coach savings (lifetime)
+## Advisor routing savings (lifetime)
 
-Advisor-coach replaces every-turn GPT-5.5 calls with a mix: GPT-5.5 only for strategic advisor/review calls, GPT-5.4-nano for everything else.
+Advisor replaces every-turn GPT-5.5 calls with a mix: GPT-5.5 only for strategic advisor/review calls, GPT-5.4-nano for everything else.
 
 ### Usage stats
 
@@ -55,10 +55,10 @@ Pricing used: GPT-5.5 ($15/M in, $60/M out), GPT-5.4-nano ($1/M in, $4/M out).
 
 | Scenario | Input cost | Output cost | **Total** |
 |---|---|---|---|
-| **All on GPT-5.5** (no advisor-coach) | $23.03 | $36.85 | **$59.88** |
+| **All on GPT-5.5** (no advisor) | $23.03 | $36.85 | **$59.88** |
 | GPT-5.5 for 52 advisor calls | $0.73 | $1.93 | $2.66 |
 | GPT-5.4-nano for 3,071 baseline turns | $1.49 | $2.33 | $3.82 |
-| **With advisor-coach** | $2.22 | $4.26 | **$6.47** |
+| **With advisor routing** | $2.22 | $4.26 | **$6.47** |
 
 **Savings: $53.41 (89.2%)** vs running everything on GPT-5.5.
 
@@ -70,7 +70,7 @@ The ~$2.66 spent on GPT-5.5 advisor calls buys:
 - Cache deduplication (identical questions don't re-fire)
 - Session-aware context (brief, recent files, errors)
 
-Without advisor-coach, every one of the 3,071 turns would pay GPT-5.5 prices regardless of whether it's a strategic decision or a mechanical edit.
+Without advisor routing, every one of the 3,071 turns would pay GPT-5.5 prices regardless of whether it's a strategic decision or a mechanical edit.
 
 ### How it works
 

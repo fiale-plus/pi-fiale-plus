@@ -2,4 +2,4 @@
 
 Session goal tracking for Pi.
 
-Install: `npm install @fiale-plus/pi-goal`
+Install locally from this repo root: `npm install`
