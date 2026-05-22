@@ -2,4 +2,4 @@
 
 Shell command risk checks and approvals for Pi.
 
-Install: `npm install @fiale-plus/pi-guardrails`
+Install locally from this repo root: `npm install`

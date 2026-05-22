@@ -5,13 +5,9 @@ import { Type } from "typebox";
 import { featureFile, readText, truncate, writeText } from "@fiale-plus/pi-core";
 import {
   appendRouteLog,
-  buildRouterPrompt,
   heuristicRoute,
-  mergeClassifierDecision,
   mergeReviewPolicy,
-  parseRouterResponse,
   routeNote,
-  shouldQueryClassifier,
   summarizeRoute,
   type AdvisorRouteDecision,
   type AdvisorRouteInput,
@@ -157,8 +153,6 @@ const REVIEW_SYSTEM = `You are a senior reviewer. An AI agent just completed wor
   "notify": true
 }`;
 
-const ROUTER_SYSTEM = `You are a routing classifier for a coding assistant. Return ONLY valid JSON with fields: label, confidence, reason. Use the allowed labels for the given phase. Keep it short.`;
-
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function hash(...parts: string[]): string {
@@ -218,34 +212,6 @@ async function resolveModel(ctx: any, config: AdvisorConfig): Promise<{ model: a
   return null;
 }
 
-async function classifyRoute(pi: ExtensionAPI, ctx: any, config: AdvisorConfig, input: AdvisorRouteInput): Promise<AdvisorRouteDecision> {
-  const heuristic = heuristicRoute(input);
-  if (!shouldQueryClassifier(heuristic)) {
-    appendRouteLog(heuristic);
-    return heuristic;
-  }
-
-  const resolved = await resolveModel(ctx, config);
-  if (!resolved) {
-    appendRouteLog(heuristic);
-    return heuristic;
-  }
-
-  const messages = [
-    { role: "user", content: buildRouterPrompt(input), timestamp: new Date().toISOString() },
-  ] as any[];
-  const resp = await completeSimple(resolved.model, { systemPrompt: ROUTER_SYSTEM, messages: messages as any }, {
-    apiKey: resolved.auth.apiKey,
-    headers: resolved.auth.headers,
-    maxTokens: 120,
-    reasoning: "low" as ThinkingLevel,
-  });
-  const parsed = parseRouterResponse(input.phase, responseText(resp));
-  const route = parsed ? mergeClassifierDecision(input, parsed, "llm") : heuristic;
-  appendRouteLog(route);
-  return route;
-}
-
 async function askAdvisor(pi: ExtensionAPI, ctx: any, question: string, scope: string, includeWork: boolean) {
   const config = loadConfig();
   const state = loadState();
@@ -286,7 +252,8 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
     fileChanged: meta.fileChanged,
     failed: meta.failed,
   };
-  const reviewRoute = await classifyRoute(pi, ctx, config, reviewInput);
+  const reviewRoute = heuristicRoute(reviewInput);
+  appendRouteLog(reviewRoute);
   state.router.review = reviewRoute;
   saveState(state);
 
@@ -337,11 +304,11 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
   if (json.verdict === "on_track" && json.notify !== true) return;
   if (json.verdict === "skip") return;
   const emoji = json.verdict === "on_track" ? "✅" : json.verdict === "course_correct" ? "🔄" : "⏳";
-  const lines = [`Advisor review ${emoji} ${json.verdict?.replace("_", " ") || "?"}`];
-  if (json.summary) lines.push("", json.summary.slice(0, 300));
-  if (json.actions?.length) lines.push("", ...json.actions.slice(0, 3));
-  if (json.checklist?.length) lines.push("", "Check:", ...json.checklist.slice(0, 3));
-  ctx.ui?.notify?.(lines.join("\n"), json.verdict === "course_correct" ? "warning" : "info");
+  const compact = json.summary ? ` ${json.summary.slice(0, 120)}` : "";
+  ctx.ui?.notify?.(
+    `${emoji} ${json.verdict?.replace("_", " ") || "?"}:${compact}`,
+    json.verdict === "course_correct" ? "warning" : "info",
+  );
 
   if (json.verdict !== "on_track") {
     state.followUp = [json.summary, ...(json.actions?.slice(0, 2) || [])].filter(Boolean).join(" — ");
@@ -371,7 +338,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     },
   });
 
-  // ── Preflight ──────────────────────────────────────────────────────────
+  // ── Preflight (heuristics only — no LLM call, <1ms) ──────────────────
   pi.on("before_agent_start", async (event: any, ctx: any) => {
     if (config.mode === "off" || config.mode === "manual") return { systemPrompt: event.systemPrompt };
     const state = loadState();
@@ -379,7 +346,8 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     if (prompt) state.lastTask = prompt;
     const briefText = brief(state);
     const routeInput: AdvisorRouteInput = { phase: "preflight", text: prompt || event.systemPrompt || "", brief: briefText };
-    const route = await classifyRoute(pi, ctx, config, routeInput);
+    const route = heuristicRoute(routeInput);
+    appendRouteLog(route);
     state.router.preflight = route;
     const follow = state.followUp;
     if (follow) { state.followUp = ""; }
