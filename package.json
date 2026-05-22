@@ -15,6 +15,8 @@
     "routing:autolabel": "tsx scripts/auto-label-routing-queue.ts",
     "routing:gold": "tsx scripts/prepare-routing-gold.ts",
     "routing:advisor-log": "tsx scripts/mine-advisor-router-log.ts",
+    "routing:train": "tsx scripts/train-routing-model.ts",
+    "routing:score": "tsx scripts/score-routing-active-learning.ts",
     "routing:eval": "tsx scripts/eval-routing-baselines.ts"
   },
   "engines": {

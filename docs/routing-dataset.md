@@ -90,6 +90,22 @@ This reads `~/.pi/agent/fiale-plus/advisor/evals/advisor-router.jsonl` and write
 
 Current finding: failed-turn closeout rows like `Turn reported failure.` are diagnostic examples, not task-intent training examples.
 
+## Train the first baseline
+
+```bash
+npm run routing:train
+```
+
+This trains TF-IDF + multinomial logistic regression on `data/routing/gold.jsonl`, saves `data/routing/routing-model.json`, and writes a training report with accuracy, macro-F1, weighted-F1, per-class recall, and confusion matrix.
+
+## Score active-learning queue
+
+```bash
+npm run routing:score
+```
+
+This ranks `data/routing/unlabeled.jsonl` by model uncertainty and writes `data/routing/active-learning-queue.jsonl` plus a report. Use this to pull the hardest examples back into gold if manual review becomes available.
+
 ## Training gate
 
 Train only after `gold.jsonl` exists with at least 120 validated rows. Evaluate on hand labels with macro-F1 and per-class recall. Heuristic-vs-heuristic accuracy is only a consistency check.
