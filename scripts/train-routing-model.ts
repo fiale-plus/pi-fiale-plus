@@ -32,6 +32,7 @@ interface Example {
   label: Label;
   id?: string;
   source?: string;
+  weight?: number;
 }
 
 interface SplitSet {
@@ -49,6 +50,8 @@ interface Report {
   rows: number;
   train: number;
   test: number;
+  silver: number;
+  trainGold: number;
   labels: Record<string, number>;
   trainLabels: Record<string, number>;
   testLabels: Record<string, number>;
@@ -106,6 +109,7 @@ function parseArgs(argv: string[]) {
   }
   return {
     input: String(args.input || DEFAULT_INPUT),
+    silver: args.silver ? String(args.silver) : "",
     model: String(args.model || DEFAULT_MODEL),
     report: String(args.report || DEFAULT_REPORT),
     split: Math.max(0.1, Math.min(0.9, Number(args.split || 0.8) || 0.8)),
@@ -116,6 +120,7 @@ function parseArgs(argv: string[]) {
     epochs: Math.max(1, Number(args.epochs || 40) || 40),
     learningRate: Math.max(0.001, Number(args["learning-rate"] || 0.25) || 0.25),
     l2: Math.max(0, Number(args.l2 || 0.0001) || 0.0001),
+    silverWeight: Math.max(0, Math.min(1, Number(args["silver-weight"] || 0.35) || 0.35)),
     seed: Math.floor(Number(args.seed || 42) || 42),
   };
 }
@@ -151,6 +156,7 @@ function inc(map: Map<string, number>, key: string, by = 1): void {
 function extractFeatureCounts(text: string, wordNgrams: number[], charNgrams: number[]): Map<string, number> {
   const counts = new Map<string, number>();
   const toks = tokens(text);
+  const lower = normalize(text);
   for (const n of wordNgrams) {
     if (n <= 0 || toks.length < n) continue;
     for (let i = 0; i <= toks.length - n; i++) {
@@ -158,7 +164,7 @@ function extractFeatureCounts(text: string, wordNgrams: number[], charNgrams: nu
       inc(counts, `w${n}:${gram}`);
     }
   }
-  const norm = ` ${normalize(text)} `;
+  const norm = ` ${lower} `;
   for (const n of charNgrams) {
     if (n <= 0 || norm.length < n) continue;
     for (let i = 0; i <= norm.length - n; i++) {
@@ -167,6 +173,17 @@ function extractFeatureCounts(text: string, wordNgrams: number[], charNgrams: nu
       inc(counts, `c${n}:${gram}`);
     }
   }
+
+  if (toks.length > 0) inc(counts, `pref1:${toks[0]}`);
+  if (toks.length > 1) inc(counts, `pref2:${toks.slice(0, 2).join('_')}`);
+  if (toks.length > 2) inc(counts, `pref3:${toks.slice(0, 3).join('_')}`);
+  if (text.includes("?")) inc(counts, "cue:question_mark");
+
+  const singleCues = ["check", "why", "what", "how", "should", "status", "stats", "log", "logs", "review", "diff", "pr", "build", "run", "test", "deploy", "fix", "debug", "install", "configure", "plan", "continue", "resume", "compact", "research", "update", "patch", "cleanup", "remove"];
+  const multiCues = ["what is", "what's", "safe to use", "pull request", "model family", "how does", "next step", "path forward", "should we", "what should"];
+  const tokenSet = new Set(toks);
+  for (const cue of singleCues) if (tokenSet.has(cue)) inc(counts, `cue:${cue}`);
+  for (const cue of multiCues) if (lower.includes(cue)) inc(counts, `cue:${cue.replace(/\s+/g, '_')}`);
   return counts;
 }
 
@@ -302,10 +319,15 @@ function predictClass(vec: SparseVector, weights: number[][], bias: number[]): n
   return best;
 }
 
-function classWeights(rows: Example[], labelToIndex: Map<string, number>): number[] {
+function classWeights(rows: Example[], labelToIndex: Map<string, number>, sampleWeights: number[] = []): number[] {
   const counts = new Array(labelToIndex.size).fill(0);
-  for (const row of rows) counts[labelToIndex.get(row.label)!]++;
-  const total = rows.length;
+  let total = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const weight = sampleWeights[i] ?? row.weight ?? 1;
+    counts[labelToIndex.get(row.label)!] += weight;
+    total += weight;
+  }
   return counts.map((count) => count > 0 ? total / (counts.length * count) : 0);
 }
 
@@ -323,15 +345,18 @@ function addSampleGrad(weights: number[][], bias: number[], vec: SparseVector, t
   }
 }
 
-function crossEntropy(vecs: SparseVector[], labels: number[], weights: number[][], bias: number[], classW: number[]): number {
+function crossEntropy(vecs: SparseVector[], labels: number[], weights: number[][], bias: number[], classW: number[], sampleWeights: number[]): number {
   if (vecs.length === 0) return 0;
   let total = 0;
+  let denom = 0;
   for (let i = 0; i < vecs.length; i++) {
     const probs = predictProbs(vecs[i], weights, bias);
     const p = Math.max(1e-12, probs[labels[i]]);
-    total += -Math.log(p) * (classW[labels[i]] || 1);
+    const sw = sampleWeights[i] ?? 1;
+    total += -Math.log(p) * (classW[labels[i]] || 1) * sw;
+    denom += sw;
   }
-  return total / vecs.length;
+  return denom > 0 ? total / denom : 0;
 }
 
 function accuracy(actual: number[], predicted: number[]): number {
@@ -385,24 +410,30 @@ function majorityLabel(rows: Example[]): string {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const rows = readRows(args.input).map((row) => ({ text: row.text, label: row.label, id: row.id, source: row.source }));
+  const rows = readRows(args.input).map((row) => ({ text: row.text, label: row.label, id: row.id, source: row.source, weight: 1 }));
   if (rows.length < 20) throw new Error(`Need more data; found only ${rows.length} rows in ${args.input}`);
+
+  const silverRows = args.silver
+    ? readRows(args.silver).map((row) => ({ text: row.text, label: row.label, id: row.id, source: row.source, weight: args.silverWeight }))
+    : [];
 
   const split = stratifiedSplit(rows, args.split, args.seed);
   const trainVal = stratifiedTrainVal(split.train, args.trainFraction, args.valFraction, args.seed);
+  const trainExamples = [...trainVal.train, ...silverRows];
+  const trainWeights = [...trainVal.train.map(() => 1), ...silverRows.map(() => args.silverWeight)];
 
-  const trainCounts = buildFeatureSpace(trainVal.train, args.maxFeatures, args.minDf, [1, 2], [3, 4]);
+  const trainCounts = buildFeatureSpace(trainExamples, args.maxFeatures, args.minDf, [1, 2], [3, 4]);
   const valCounts = trainVal.val.map((row) => toVector(extractFeatureCounts(row.text, [1, 2], [3, 4]), trainCounts.index, trainCounts.idf));
   const testCounts = split.test.map((row) => toVector(extractFeatureCounts(row.text, [1, 2], [3, 4]), trainCounts.index, trainCounts.idf));
   const trainVectors = trainCounts.vectors;
 
-  const labelSet = LABELS.filter((label) => rows.some((row) => row.label === label));
+  const labelSet = LABELS.filter((label) => rows.some((row) => row.label === label) || silverRows.some((row) => row.label === label));
   const labelToIndex = new Map(labelSet.map((label, i) => [label, i]));
   const indexToLabel = labelSet;
-  const trainY = trainVal.train.map((row) => labelToIndex.get(row.label)!);
+  const trainY = trainExamples.map((row) => labelToIndex.get(row.label)!);
   const valY = trainVal.val.map((row) => labelToIndex.get(row.label)!);
   const testY = split.test.map((row) => labelToIndex.get(row.label)!);
-  const classW = classWeights(trainVal.train, labelToIndex);
+  const classW = classWeights(trainExamples, labelToIndex, trainWeights);
 
   const featureCount = trainCounts.features.length;
   const classCount = labelSet.length;
@@ -421,7 +452,7 @@ function main() {
       const vec = trainVectors[idx];
       const y = trainY[idx];
       const probs = predictProbs(vec, weights, bias);
-      const sampleWeight = classW[y] || 1;
+      const sampleWeight = (classW[y] || 1) * (trainWeights[idx] || 1);
       addSampleGrad(weights, bias, vec, y, probs, sampleWeight, args.learningRate / Math.sqrt(epoch), args.l2);
     }
 
@@ -429,7 +460,7 @@ function main() {
     const valMatrix = confusion(valY, valPred, classCount);
     const valMetrics = perClassMetrics(valMatrix, indexToLabel);
     const valF1 = macroF1(valMetrics);
-    const trainLoss = crossEntropy(trainVectors, trainY, weights, bias, classW);
+    const trainLoss = crossEntropy(trainVectors, trainY, weights, bias, classW, trainWeights);
     if (valF1 > bestValF1 || (valF1 === bestValF1 && trainLoss < bestTrainLoss)) {
       bestValF1 = valF1;
       bestEpoch = epoch;
@@ -478,10 +509,12 @@ function main() {
   const report: Report = {
     input: args.input,
     rows: rows.length,
-    train: split.train.length,
+    train: trainExamples.length,
     test: split.test.length,
+    silver: silverRows.length,
+    trainGold: trainVal.train.length,
     labels: rows.reduce<Record<string, number>>((acc, row) => { acc[row.label] = (acc[row.label] || 0) + 1; return acc; }, {}),
-    trainLabels: trainVal.train.reduce<Record<string, number>>((acc, row) => { acc[row.label] = (acc[row.label] || 0) + 1; return acc; }, {}),
+    trainLabels: trainExamples.reduce<Record<string, number>>((acc, row) => { acc[row.label] = (acc[row.label] || 0) + 1; return acc; }, {}),
     testLabels: split.test.reduce<Record<string, number>>((acc, row) => { acc[row.label] = (acc[row.label] || 0) + 1; return acc; }, {}),
     majority: {
       label: majority,
@@ -512,7 +545,7 @@ function main() {
   fs.writeFileSync(args.report, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
   console.log(`rows: ${rows.length}`);
-  console.log(`train/val/test: ${trainVal.train.length}/${trainVal.val.length}/${split.test.length}`);
+  console.log(`train gold/silver/val/test: ${trainVal.train.length}/${silverRows.length}/${trainVal.val.length}/${split.test.length}`);
   console.log(`labels: ${JSON.stringify(report.labels)}`);
   console.log(`majority acc: ${(report.majority.accuracy * 100).toFixed(1)}% (${report.majority.correct}/${report.majority.total})`);
   console.log(`logreg acc: ${(report.logistic.accuracy * 100).toFixed(1)}%`);
@@ -520,6 +553,7 @@ function main() {
   console.log(`logreg weighted-F1: ${report.logistic.weightedF1.toFixed(3)}`);
   console.log(`best epoch: ${report.logistic.bestEpoch}`);
   console.log(`feature count: ${report.featureCount}`);
+  if (silverRows.length > 0) console.log(`silver weight: ${args.silverWeight}`);
   console.log(`model: ${args.model}`);
   console.log(`report: ${args.report}`);
 }

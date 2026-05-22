@@ -106,6 +106,14 @@ npm run routing:score
 
 This ranks `data/routing/unlabeled.jsonl` by model uncertainty and writes `data/routing/active-learning-queue.jsonl` plus a report. Use this to pull the hardest examples back into gold if manual review becomes available.
 
+## Build conservative silver data
+
+```bash
+npm run routing:silver
+```
+
+This keeps weak heuristic examples where the current model agrees with the heuristic label at decent confidence and margin. The result is training-only augmentation (`data/routing/silver.jsonl`), not gold truth.
+
 ## Training gate
 
 Train only after `gold.jsonl` exists with at least 120 validated rows. Evaluate on hand labels with macro-F1 and per-class recall. Heuristic-vs-heuristic accuracy is only a consistency check.

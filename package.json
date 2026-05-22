@@ -17,6 +17,7 @@
     "routing:advisor-log": "tsx scripts/mine-advisor-router-log.ts",
     "routing:train": "tsx scripts/train-routing-model.ts",
     "routing:score": "tsx scripts/score-routing-active-learning.ts",
+    "routing:silver": "tsx scripts/build-routing-silver.ts",
     "routing:eval": "tsx scripts/eval-routing-baselines.ts"
   },
   "engines": {

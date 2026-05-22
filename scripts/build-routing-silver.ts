@@ -4,9 +4,9 @@ import path from "node:path";
 import { LABELS, type Label } from "./routing-heuristics.js";
 
 const DEFAULT_MODEL = path.join(process.cwd(), "data", "routing", "routing-model.json");
-const DEFAULT_INPUT = path.join(process.cwd(), "data", "routing", "unlabeled.jsonl");
-const DEFAULT_OUTPUT = path.join(process.cwd(), "data", "routing", "active-learning-queue.jsonl");
-const DEFAULT_REPORT = path.join(process.cwd(), "data", "routing", "active-learning-report.json");
+const DEFAULT_INPUT = path.join(process.cwd(), "data", "routing", "examples.jsonl");
+const DEFAULT_OUTPUT = path.join(process.cwd(), "data", "routing", "silver.jsonl");
+const DEFAULT_REPORT = path.join(process.cwd(), "data", "routing", "silver-report.json");
 
 interface ModelArtifact {
   kind: string;
@@ -16,12 +16,14 @@ interface ModelArtifact {
   bias: number[];
   weights: number[][];
   config?: Record<string, unknown>;
-  provenance?: string;
 }
 
-interface Row {
-  id?: string;
+interface SourceRow {
   text: string;
+  label: Label;
+  confidence?: number;
+  confidenceSource?: string;
+  reason?: string;
   sessionFile?: string;
   sessionId?: string;
   cwd?: string;
@@ -30,13 +32,12 @@ interface Row {
   createdAt?: string;
 }
 
-interface ScoredRow extends Row {
-  predictedLabel: string;
-  confidence: number;
-  margin: number;
-  entropy: number;
-  needsReview: boolean;
-  top: Array<[string, number]>;
+interface SilverRow extends SourceRow {
+  source: "silver_agree";
+  labeler: string;
+  modelConfidence: number;
+  modelMargin: number;
+  modelReason: string;
 }
 
 function parseArgs(argv: string[]) {
@@ -58,9 +59,10 @@ function parseArgs(argv: string[]) {
     input: String(args.input || DEFAULT_INPUT),
     output: String(args.output || DEFAULT_OUTPUT),
     report: String(args.report || DEFAULT_REPORT),
-    limit: Math.max(0, Number(args.limit || 200) || 200),
-    reviewThreshold: Math.max(0, Math.min(1, Number(args["review-threshold"] || 0.6) || 0.6)),
-    marginThreshold: Math.max(0, Math.min(1, Number(args["margin-threshold"] || 0.15) || 0.15)),
+    threshold: Math.max(0, Math.min(1, Number(args.threshold || 0.5) || 0.5)),
+    marginThreshold: Math.max(0, Math.min(1, Number(args["margin-threshold"] || 0.02) || 0.02)),
+    labels: String(args.labels || "ops,research,planning,implementation"),
+    limit: Math.max(0, Number(args.limit || 0) || 0),
   };
 }
 
@@ -148,7 +150,11 @@ function softmax(logits: number[]): number[] {
   return exps.map((v) => v / sum);
 }
 
-function predict(vec: { indices: number[]; values: number[] }, model: ModelArtifact) {
+function predict(text: string, model: ModelArtifact) {
+  const wordNgrams = Array.isArray(model.config?.wordNgrams) ? (model.config!.wordNgrams as number[]) : [1, 2];
+  const charNgrams = Array.isArray(model.config?.charNgrams) ? (model.config!.charNgrams as number[]) : [3, 4];
+  const index = new Map(model.features.map((feature, i) => [feature, i]));
+  const vec = toVector(extractFeatureCounts(text, wordNgrams, charNgrams), index, model.idf);
   const scores = model.bias.slice();
   for (let c = 0; c < model.weights.length; c++) {
     let score = scores[c];
@@ -161,11 +167,9 @@ function predict(vec: { indices: number[]; values: number[] }, model: ModelArtif
   const probs = softmax(scores);
   const ranked = probs.map((p, i) => [model.labels[i], p] as [string, number]).sort((a, b) => b[1] - a[1]);
   return {
-    predictedLabel: ranked[0]?.[0] || model.labels[0] || LABELS[0],
+    label: ranked[0]?.[0] || LABELS[0],
     confidence: ranked[0]?.[1] || 0,
     margin: (ranked[0]?.[1] || 0) - (ranked[1]?.[1] || 0),
-    entropy: -probs.reduce((sum, p) => sum + (p > 0 ? p * Math.log2(p) : 0), 0),
-    top: ranked.slice(0, 3),
   };
 }
 
@@ -173,43 +177,49 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   const model = JSON.parse(fs.readFileSync(args.model, "utf8")) as ModelArtifact;
   if (model.kind !== "routing-logreg-v1") throw new Error(`Unexpected model kind: ${model.kind}`);
-  const rows = readJsonl<Row>(args.input).filter((row) => typeof row.text === "string" && row.text.trim().length > 0);
-  const index = new Map(model.features.map((feature, i) => [feature, i]));
-  const wordNgrams = Array.isArray(model.config?.wordNgrams) ? (model.config!.wordNgrams as number[]) : [1, 2];
-  const charNgrams = Array.isArray(model.config?.charNgrams) ? (model.config!.charNgrams as number[]) : [3, 4];
+  const allowedLabels = new Set(args.labels.split(",").map((s) => s.trim()).filter(Boolean));
+  const rows = readJsonl<SourceRow>(args.input).filter((row) => LABELS.includes(row.label) && (allowedLabels.size === 0 || allowedLabels.has(row.label)));
+  const silver: SilverRow[] = [];
+  const stats = {
+    total: rows.length,
+    kept: 0,
+    byLabel: {} as Record<string, number>,
+    bySourceConfidence: {} as Record<string, number>,
+    disagreements: 0,
+  };
 
-  const scored: ScoredRow[] = rows.map((row) => {
-    const vec = toVector(extractFeatureCounts(row.text, wordNgrams, charNgrams), index, model.idf);
-    const pred = predict(vec, model);
-    return {
+  for (const row of rows) {
+    const pred = predict(row.text, model);
+    const agree = pred.label === row.label;
+    const strongEnough = pred.confidence >= args.threshold && pred.margin >= args.marginThreshold;
+    if (!agree || !strongEnough) continue;
+    silver.push({
       ...row,
-      predictedLabel: pred.predictedLabel,
-      confidence: pred.confidence,
-      margin: pred.margin,
-      entropy: pred.entropy,
-      needsReview: pred.confidence < args.reviewThreshold || pred.margin < args.marginThreshold,
-      top: pred.top,
-    };
-  });
+      source: "silver_agree",
+      labeler: "model_agree_v1",
+      modelConfidence: pred.confidence,
+      modelMargin: pred.margin,
+      modelReason: `model agreed with weak label at confidence ${pred.confidence.toFixed(3)} and margin ${pred.margin.toFixed(3)}`,
+    });
+    stats.kept++;
+    stats.byLabel[row.label] = (stats.byLabel[row.label] || 0) + 1;
+    const bucket = pred.confidence >= 0.7 ? ">=0.7" : pred.confidence >= 0.6 ? ">=0.6" : ">=0.5";
+    stats.bySourceConfidence[bucket] = (stats.bySourceConfidence[bucket] || 0) + 1;
+  }
 
-  scored.sort((a, b) => a.confidence - b.confidence || a.margin - b.margin || b.entropy - a.entropy);
-  const queue = scored.slice(0, args.limit);
-  const counts = queue.reduce<Record<string, number>>((acc, row) => {
-    acc[row.predictedLabel] = (acc[row.predictedLabel] || 0) + 1;
-    return acc;
-  }, {});
-  const reviewCount = queue.filter((row) => row.needsReview).length;
-  const top = queue.slice(0, 25).map((row) => ({ id: row.id, predictedLabel: row.predictedLabel, confidence: row.confidence, margin: row.margin, entropy: row.entropy, needsReview: row.needsReview, text: row.text.slice(0, 220) }));
+  silver.sort((a, b) => (b.modelConfidence - a.modelConfidence) || (b.modelMargin - a.modelMargin) || (a.label.localeCompare(b.label)));
+  if (args.limit > 0) silver.splice(args.limit);
 
   fs.mkdirSync(path.dirname(args.output), { recursive: true });
-  fs.writeFileSync(args.output, queue.map((row) => `${JSON.stringify(row)}\n`).join(""), "utf8");
-  fs.writeFileSync(args.report, `${JSON.stringify({ model: args.model, input: args.input, rows: rows.length, queued: queue.length, reviewCount, counts, top, thresholds: { reviewThreshold: args.reviewThreshold, marginThreshold: args.marginThreshold } }, null, 2)}\n`, "utf8");
+  fs.writeFileSync(args.output, silver.map((row) => `${JSON.stringify(row)}\n`).join(""), "utf8");
+  fs.writeFileSync(args.report, `${JSON.stringify({ input: args.input, model: args.model, total: stats.total, kept: silver.length, threshold: args.threshold, marginThreshold: args.marginThreshold, labels: args.labels, byLabel: stats.byLabel, byConfidence: stats.bySourceConfidence, sample: silver.slice(0, 12).map((row) => ({ label: row.label, confidence: row.modelConfidence, margin: row.modelMargin, text: row.text.slice(0, 140) })) }, null, 2)}\n`, "utf8");
 
-  console.log(`rows: ${rows.length}`);
-  console.log(`queued: ${queue.length}`);
-  console.log(`needs review: ${reviewCount}`);
-  console.log(`predicted counts: ${JSON.stringify(counts)}`);
-  console.log(`queue: ${args.output}`);
+  console.log(`rows: ${stats.total}`);
+  console.log(`kept: ${silver.length}`);
+  console.log(`threshold: ${args.threshold}, margin: ${args.marginThreshold}`);
+  console.log(`byLabel: ${JSON.stringify(stats.byLabel)}`);
+  console.log(`byConfidence: ${JSON.stringify(stats.bySourceConfidence)}`);
+  console.log(`output: ${args.output}`);
   console.log(`report: ${args.report}`);
 }
 
