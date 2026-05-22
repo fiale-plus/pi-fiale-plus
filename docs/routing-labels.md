@@ -53,6 +53,8 @@ The miner writes JSONL rows:
 
 ```bash
 npm run routing:mine
+npm run routing:queue
+npm run routing:gold -- --allow-partial
 npm run routing:eval
 ```
 
