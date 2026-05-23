@@ -190,6 +190,19 @@ function contentText(content: unknown): string {
   return parts.join("\n").replace(/\s+/g, " ").trim();
 }
 
+/** Lightweight intent classifier for preflight signal enrichment */
+function classifyIntent(text: string): string {
+  const t = ` ${text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ")} `;
+  if (/\b(plan|design|architecture|scope|next step|strategy|proposal|should we|what should|tradeoff|decision|path forward|how to approach)\b/.test(t)) return "plan";
+  if (/\b(debug|bug|error|fail|broken|crash|stack|traceback|investigate|why (is|was|does|did|are) )/.test(t)) return "debug";
+  if (/\b(review|check |verify|validate|look at|diff|pr |pull request|feedback)\b/i.test(t)) return "review";
+  if (/\b(research|compare|difference|which (one|model|lib|is better)|how does|documentation|read (about|the)|what is)\b/i.test(t)) return "research";
+  if (/\b(implement|build|write|create|add|make|refactor|rename|extract|migrate|fix|patch)\b/i.test(t)) return "implement";
+  if (/\b(install|config|setup|run|build|deploy|ssh|status|stats|log(s)? |theme|terminal|shell|brew|npm (install|run)|git (push|pull|remote))\b/i.test(t)) return "ops";
+  if (/\b(continue|resume|compact|summarize|after compact|move on)\b/i.test(t)) return "handoff";
+  return "";
+}
+
 /** Check if a tool result or message indicates an actual execution failure */
 function isActualFailure(tool: any): boolean {
   if (tool?.isError === true) return true;
@@ -370,9 +383,11 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     const prompt = typeof event.prompt === "string" && event.prompt.trim() ? squish(event.prompt, 1000) : "";
     if (prompt) state.lastTask = prompt;
     const briefText = brief(state);
-    // Enrich preflight text with session brief so the binary gate has more context
-    const enrichedText = [prompt, event.systemPrompt || "", briefText ? `Brief: ${briefText}` : ""].filter(Boolean).join(" ");
-    const routeInput: AdvisorRouteInput = { phase: "preflight", text: enrichedText || prompt || event.systemPrompt || briefText || "", brief: briefText };
+    const intent = prompt ? classifyIntent(prompt) : "";
+    const intentTag = intent ? `Intent: ${intent}` : "";
+    // Enrich preflight text with session context so the binary gate has more signal
+    const enrichedText = [prompt, event.systemPrompt || "", briefText ? `Brief: ${briefText}` : "", intentTag].filter(Boolean).join(" ");
+    const routeInput: AdvisorRouteInput = { phase: "preflight", text: enrichedText || prompt || event.systemPrompt || briefText || intentTag || "", brief: briefText };
 
     // Binary gate model — fast local classifier for continue/escalate decisions
     const gatePrediction = binaryGatePredict(routeInput.text);
