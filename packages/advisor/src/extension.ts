@@ -192,14 +192,9 @@ function contentText(content: unknown): string {
 
 /** Check if a tool result or message indicates an actual execution failure */
 function isActualFailure(tool: any): boolean {
-  // Check explicit status/error flags
   if (tool?.isError === true) return true;
   if (tool?.status === "error" || tool?.status === "failure") return true;
   if (tool?.error && String(tool.error).length > 0) return true;
-  // Check tool result output for exception-level signals only
-  const text = String(tool?.result ?? tool?.output ?? tool?.content ?? "").toLowerCase();
-  if (/^error:|^failed:|^exception:|^typeerror:|^referenceerror:/i.test(text)) return true;
-  if (/cannot read property|cannot find module|is not a function|is not defined|unexpected token/i.test(text)) return true;
   return false;
 }
 
@@ -333,9 +328,10 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
   if (json.verdict === "on_track" && json.notify !== true) return;
   if (json.verdict === "skip") return;
   const verdictLabel = json.verdict === "not_done" ? "not called" : json.verdict?.replace("_", " ") || "?";
-  const reason = reviewRoute.reason ? ` — ${reviewRoute.reason.slice(0, 100)}` : "";
+  const reason = json.reason || reviewRoute.reason || "";
+  const reasonSuffix = reason ? ` — ${reason.slice(0, 120)}` : "";
   ctx.ui?.notify?.(
-    `advisor: ${verdictLabel}${reason}`,
+    `advisor: ${verdictLabel}${reasonSuffix}`,
     json.verdict === "course_correct" ? "warning" : "info",
   );
 
