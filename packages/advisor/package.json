@@ -4,6 +4,7 @@
   "description": "PiRogue advisor extension for Pi — multi-model support, SOTA model suggestion, cache-aware session advisory.",
   "type": "module",
   "license": "MIT",
+  "repository": "https://github.com/fiale-plus/pi-rogue",
   "keywords": [
     "pi-package"
   ],
