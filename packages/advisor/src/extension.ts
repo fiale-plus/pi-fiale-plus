@@ -205,10 +205,11 @@ function renderAdvisorHint(message: any, options: { expanded?: boolean }, theme:
   const decisionColor = decision === "call" ? "accent" : decision === "skip" ? "muted" : "dim";
   const source = theme.bold(theme.fg(sourceColor, `[${customType}]`));
   const verdict = theme.bold(theme.fg(decisionColor, decision));
+  const glyph = decision === "call" ? "↗" : decision === "defer" ? "…" : "·";
   const reason = squish(details.reason || contentText(message?.content) || "no extra detail", 180);
 
   const box = new Box(1, 1, (s: string) => theme.bg("customMessageBg", s));
-  box.addChild(new Text(`${source} ${verdict} · ${theme.fg("dim", "reason: ")}${reason}`, 0, 0));
+  box.addChild(new Text(`${theme.bold(theme.fg(decisionColor, glyph))} ${source} ${verdict} · ${theme.fg("dim", "reason: ")}${reason}`, 0, 0));
 
   if (options.expanded && details.summary) {
     box.addChild(new Text(theme.fg("dim", `summary: ${squish(details.summary, 220)}`), 0, 0));
