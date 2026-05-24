@@ -1,6 +1,6 @@
 # PiRogue
 
-[![CI](https://github.com/fiale-plus/pi-fiale-plus/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/fiale-plus/pi-fiale-plus/actions/workflows/check.yml)
+[![CI](https://github.com/fiale-plus/pi-rogue/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/fiale-plus/pi-rogue/actions/workflows/check.yml)
 [![npm](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-advisor?logo=npm)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor)
 
 PiRogue is an advisor-first Pi extension repo. **Only the advisor package is public right now**; everything else is internal workspace code for later.
