@@ -14,6 +14,7 @@ import {
   type AdvisorRouteInput,
   type ReviewPolicy,
 } from "./router.js";
+import { classifyIntent, classifyMode } from "./preflight-signals.js";
 
 // ── Config: 3 optional fields ────────────────────────────────────────────
 
@@ -370,7 +371,13 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     const prompt = typeof event.prompt === "string" && event.prompt.trim() ? squish(event.prompt, 1000) : "";
     if (prompt) state.lastTask = prompt;
     const briefText = brief(state);
-    const routeInput: AdvisorRouteInput = { phase: "preflight", text: prompt || event.systemPrompt || "", brief: briefText };
+    const intent = prompt ? classifyIntent(prompt) : "";
+    const mode = prompt ? classifyMode(prompt) : "";
+    const intentTag = intent ? `Intent: ${intent}` : "";
+    const modeTag = mode ? `Mode: ${mode}` : "";
+    // Enrich preflight text with session context so the binary gate has more signal
+    const enrichedText = [prompt, event.systemPrompt || "", briefText ? `Brief: ${briefText}` : "", intentTag, modeTag].filter(Boolean).join(" ");
+    const routeInput: AdvisorRouteInput = { phase: "preflight", text: enrichedText || prompt || event.systemPrompt || briefText || intentTag || modeTag || "", brief: briefText };
 
     // Binary gate model — fast local classifier for continue/escalate decisions
     const gatePrediction = binaryGatePredict(routeInput.text);
