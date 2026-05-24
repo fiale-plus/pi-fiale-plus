@@ -341,6 +341,10 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
   state.router.review = reviewRoute;
   saveState(state);
 
+  if (gatePrediction && gatePrediction.confidence >= 0.55 && gatePrediction.decision === "continue" && !reviewHeuristic.safety) {
+    return;
+  }
+
   const effectiveReview = mergeRouteReview(config.review, state.router.preflight?.review);
   const finalReview = mergeReviewPolicy(effectiveReview, reviewRoute.review);
   if (finalReview === "off") return;
