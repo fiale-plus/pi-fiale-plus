@@ -7,7 +7,7 @@ import { appendText, featureFile, truncate } from "@fiale-plus/pi-core";
 export type AdvisorPhase = "preflight" | "review" | "closeout";
 export type PreflightLabel = "continue" | "escalate_to_advisor" | "need_more_context" | "low_confidence";
 export type ReviewLabel = "on_track" | "course_correct" | "not_done" | "abstain";
-export type RouterSource = "heuristic" | "llm";
+export type RouterSource = "heuristic" | "model" | "llm";
 export type PreflightPolicy = "off" | "light" | "full" | "direct";
 export type ReviewPolicy = "off" | "light" | "strict";
 
@@ -45,7 +45,10 @@ const ROUTER_VERSION = 1;
 
 // ── Binary gate model (trained from local session data) ──────────────────
 const BINARY_GATE_PATH = featureFile("advisor", "binary-gate-model.json");
-const BINARY_GATE_SOURCE_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "../../../data/routing/binary-gate-model.json");
+const BINARY_GATE_SOURCE_PATHS = [
+  resolve(dirname(fileURLToPath(import.meta.url)), "../assets/binary-gate-model.json"),
+  resolve(dirname(fileURLToPath(import.meta.url)), "../../../data/routing/binary-gate-model.json"),
+];
 const BINARY_GATE_THRESHOLD = 0.55;
 
 interface BinaryGateModel {
@@ -61,14 +64,15 @@ let _binaryGateCache: BinaryGateModel | null | undefined = undefined;
 
 function ensureBinaryGateSeeded(): void {
   try {
-    if (!existsSync(BINARY_GATE_SOURCE_PATH)) return;
-    const sourceStat = statSync(BINARY_GATE_SOURCE_PATH);
+    const sourcePath = BINARY_GATE_SOURCE_PATHS.find((p) => existsSync(p));
+    if (!sourcePath) return;
+    const sourceStat = statSync(sourcePath);
     if (existsSync(BINARY_GATE_PATH)) {
       const installedStat = statSync(BINARY_GATE_PATH);
       if (installedStat.mtimeMs >= sourceStat.mtimeMs && installedStat.size === sourceStat.size) return;
     }
     mkdirSync(dirname(BINARY_GATE_PATH), { recursive: true });
-    copyFileSync(BINARY_GATE_SOURCE_PATH, BINARY_GATE_PATH);
+    copyFileSync(sourcePath, BINARY_GATE_PATH);
   } catch {
     // best effort: if the seed copy fails, fall back to the installed path if present
   }
@@ -450,6 +454,7 @@ export function appendRouteLog(route: AdvisorRouteDecision): void {
 }
 
 export type AdvisorDisplayDecision = "call" | "skip" | "defer";
+export type AdvisorDisplayTag = "advisor:rules" | "advisor:llm";
 
 function displayDecision(route: AdvisorRouteDecision): AdvisorDisplayDecision {
   if (route.phase === "preflight") {
@@ -469,9 +474,17 @@ function displayDecision(route: AdvisorRouteDecision): AdvisorDisplayDecision {
   }
 }
 
-export function formatAdvisorDisplay(decision: AdvisorDisplayDecision, explanation: string): string {
+function displayTag(route: AdvisorRouteDecision | AdvisorDisplayTag): AdvisorDisplayTag {
+  if (typeof route === "string") return route;
+  switch (route.source) {
+    case "llm": return "advisor:llm";
+    default: return "advisor:rules";
+  }
+}
+
+export function formatAdvisorDisplay(tag: AdvisorDisplayTag, decision: AdvisorDisplayDecision, explanation: string): string {
   const text = squish(explanation || "no extra detail", 140).toLowerCase();
-  return `[advisor: ${decision}, ${text}]`;
+  return `[${tag}: ${decision}, ${text}]`;
 }
 
 export function routeNote(route: AdvisorRouteDecision): string {
@@ -490,7 +503,7 @@ export function routeNote(route: AdvisorRouteDecision): string {
         : route.label === "not_done"
           ? "work is incomplete or failing"
           : "review signal is too weak to decide");
-  return formatAdvisorDisplay(displayDecision(route), explanation);
+  return formatAdvisorDisplay(displayTag(route), displayDecision(route), explanation);
 }
 
 export function mergeReviewPolicy(base: ReviewPolicy, route: ReviewPolicy): ReviewPolicy {

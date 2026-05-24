@@ -334,7 +334,7 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
       : json.verdict === "not_done" ? "call"
         : "defer";
   const explanation = (json.reason || reviewRoute.reason || json.summary || "review result").slice(0, 120);
-  const display = formatAdvisorDisplay(decision, explanation);
+  const display = formatAdvisorDisplay("advisor:llm", decision, explanation);
   writeText(CURRENT_PATH, `${display}\n`);
   ctx.ui?.notify?.(
     display,
@@ -390,12 +390,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     let route: AdvisorRouteDecision;
     if (gatePrediction && gatePrediction.confidence >= 0.55) {
       const binLabel = gatePrediction.decision === "continue" ? "continue" as const : "escalate_to_advisor" as const;
-      const heuristicWins =
-        heuristic.phase === "preflight" &&
-        heuristic.label === "escalate_to_advisor" &&
-        binLabel === "continue" &&
-        gatePrediction.confidence < 0.7;
-      if (heuristicWins) {
+      if (heuristic.safety) {
         route = heuristic;
       } else {
         route = {
@@ -405,7 +400,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
           reason: gatePrediction.decision === "continue"
             ? "Binary gate: local classifier predicts continue (no advisor needed)."
             : "Binary gate: local classifier predicts escalate (advisor recommended).",
-          source: "heuristic",
+          source: "model",
           preflight: binLabel === "continue" ? "off" as const : "full" as const,
           escalate: binLabel === "escalate_to_advisor",
         };

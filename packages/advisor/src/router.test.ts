@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heuristicRoute, routeNote, shouldQueryClassifier, summarizeRoute, type AdvisorRouteInput } from "./router.js";
+import { formatAdvisorDisplay, heuristicRoute, routeNote, shouldQueryClassifier, summarizeRoute, type AdvisorRouteInput } from "./router.js";
 
 describe("advisor router heuristics", () => {
   it("keeps tiny edits in continue mode", () => {
@@ -23,7 +23,7 @@ describe("advisor router heuristics", () => {
     expect(route.review).toBe("light");
     expect(route.escalate).toBe(true);
     expect(summarizeRoute(route)).toContain("preflight:escalate_to_advisor");
-    expect(routeNote(route)).toMatch(/^\[advisor: call, [a-z0-9 ,.'-]+\]$/);
+    expect(routeNote(route)).toMatch(/^\[advisor:rules: call, [a-z0-9 ,.'-]+\]$/);
     expect(routeNote(route)).toBe(routeNote(route).toLowerCase());
   });
 
@@ -33,7 +33,7 @@ describe("advisor router heuristics", () => {
 
     expect(route.label).toBe("escalate_to_advisor");
     expect(route.escalate).toBe(true);
-    expect(routeNote(route)).toMatch(/^\[advisor: call, [a-z0-9 ,.'-]+\]$/);
+    expect(routeNote(route)).toMatch(/^\[advisor:rules: call, [a-z0-9 ,.'-]+\]$/);
   });
 
   it("flags safety-sensitive prompts", () => {
@@ -42,7 +42,7 @@ describe("advisor router heuristics", () => {
 
     expect(route.safety).toBe(true);
     expect(route.label).toBe("escalate_to_advisor");
-    expect(routeNote(route)).toMatch(/^\[advisor: call, [a-z0-9 ,.'-]+\]$/);
+    expect(routeNote(route)).toMatch(/^\[advisor:rules: call, [a-z0-9 ,.'-]+\]$/);
   });
 
   it("reviews incomplete work as not done", () => {
@@ -52,7 +52,7 @@ describe("advisor router heuristics", () => {
     expect(route.label).toBe("not_done");
     expect(route.review).toBe("strict");
     expect(route.escalate).toBe(true);
-    expect(routeNote(route)).toMatch(/^\[advisor: call, [a-z0-9 ,.'-]+\]$/);
+    expect(routeNote(route)).toMatch(/^\[advisor:rules: call, [a-z0-9 ,.'-]+\]$/);
   });
 
   it("abstains when review signal is weak", () => {
@@ -62,8 +62,11 @@ describe("advisor router heuristics", () => {
     expect(route.label).toBe("abstain");
     expect(route.review).toBe("off");
     expect(shouldQueryClassifier(route)).toBe(true);
-    expect(routeNote(route)).toMatch(/^\[advisor: defer, [a-z0-9 ,.'-]+\]$/);
+    expect(routeNote(route)).toMatch(/^\[advisor:rules: defer, [a-z0-9 ,.'-]+\]$/);
     expect(routeNote(route)).toBe(routeNote(route).toLowerCase());
   });
 
+  it("formats llm advisor messages with the llm tag", () => {
+    expect(formatAdvisorDisplay("advisor:llm", "call", "All set and reviewed")).toBe("[advisor:llm: call, all set and reviewed]");
+  });
 });
