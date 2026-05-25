@@ -2,7 +2,7 @@
 
 Session orchestration for PiRogue: scheduled loop, goal, and autoresearch controls.
 
-`/goal` updates the status badge; `/loop` announces each tick and sends the instruction back into the session.
+`/goal` updates the status badge; `/loop` announces each tick, sends the instruction back into the session, and requires at least 1m cadence.
 
 Install from npm:
 
