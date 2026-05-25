@@ -16,6 +16,9 @@ type ResearchState = {
   goal?: string;
   loopInstruction?: string;
   interval?: string;
+  cycles?: number;
+  doneAttempts?: number;
+  lastResult?: "done" | "continue" | "unknown";
   updatedAt: string;
 };
 
@@ -26,6 +29,8 @@ function defaultResearchState(kind: ResearchKind): ResearchState {
     goal: "",
     loopInstruction: "",
     interval: DEFAULT_INTERVAL,
+    cycles: 0,
+    doneAttempts: 0,
     updatedAt: "",
   };
 }
@@ -66,7 +71,8 @@ function buildResearchGoal(kind: ResearchKind, instruction: string): string {
     "- make the target measurable; identify or create the benchmark/evaluation command when useful",
     "- run iterative identify → implement → build/check → test/evaluate → sanity → log cycles",
     "- preserve the benchmark/evaluation script as the durable product",
-    "- stop only when the metric/answer is materially improved and the result is summarized",
+    "- complete at least two loop cycles before declaring done unless the user manually clears it",
+    "- stop only when the metric/answer is materially improved and the result is summarized with evidence",
   ].join("\n");
 }
 
@@ -82,7 +88,7 @@ function buildResearchLoopInstruction(kind: ResearchKind, instruction: string): 
   return [
     "Run one autoresearch cycle toward the active goal.",
     `User instruction: ${instruction}`,
-    "Measure or define the target, inspect evidence, make the highest-leverage safe change, run checks/evaluation, record the result, and choose the next hypothesis.",
+    "Measure or define the target, inspect evidence, make the highest-leverage safe change, run checks/evaluation, record the result, and choose the next hypothesis. Do not declare GOAL_DONE before at least two autoresearch cycles have produced explicit check/evaluation evidence.",
   ].join("\n");
 }
 
@@ -146,6 +152,8 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
         goal,
         loopInstruction,
         interval: loop.interval,
+        cycles: 0,
+        doneAttempts: 0,
         updatedAt: "",
       });
       ctx.ui.notify(`${formatResearchState(next)}. First cycle queued now.`, "info");

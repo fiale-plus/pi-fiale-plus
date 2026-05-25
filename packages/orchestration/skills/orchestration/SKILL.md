@@ -41,7 +41,7 @@ Key behaviors to preserve:
 - keep the benchmark/evaluation script as the product
 
 Commands:
-- `/autoresearch <instruction>` — start or update the solo research flow; this creates a research goal, starts a 5m loop, and queues the first cycle immediately
+- `/autoresearch <instruction>` — start or update the solo research flow; this creates a research goal, starts a 5m loop, queues the first cycle immediately, and requires multiple/evidence-backed cycles before auto-completion
 - `/autoresearch status` — show research status and the underlying goal/loop backing
 - `/autoresearch clear` — clear it and stop its underlying loop
 

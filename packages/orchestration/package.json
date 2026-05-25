@@ -1,6 +1,6 @@
 {
   "name": "@fiale-plus/pi-rogue-orchestration",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Orchestration controls for PiRogue: scheduled loop, goal resolution, and autoresearch.",
   "type": "module",
   "license": "MIT",
@@ -11,6 +11,10 @@
   "keywords": [
     "pi-package"
   ],
+  "scripts": {
+    "check": "tsc -p ../../tsconfig.json --noEmit",
+    "test": "cd ../.. && vitest run packages/orchestration/src/*.test.ts"
+  },
   "main": "./orchestration/index.ts",
   "exports": {
     ".": "./orchestration/index.ts"
