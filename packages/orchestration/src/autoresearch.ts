@@ -1,15 +1,21 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { activeGoal, clearGoal, setGoal, setGoalStatus } from "./goal.js";
+import { clearLoop, startLoop } from "./loop.js";
 import { truncate } from "./internal.js";
 import { readSessionJson, writeSessionJson } from "./state.js";
 
 const FEATURE = "orchestration";
 const RESEARCH_FILE = "autoresearch.json";
+const DEFAULT_INTERVAL = "5m";
 
 type ResearchKind = "autoresearch" | "autoresearch-lab";
 
 type ResearchState = {
   kind: ResearchKind;
   instruction: string;
+  goal?: string;
+  loopInstruction?: string;
+  interval?: string;
   updatedAt: string;
 };
 
@@ -17,6 +23,9 @@ function defaultResearchState(kind: ResearchKind): ResearchState {
   return {
     kind,
     instruction: "",
+    goal: "",
+    loopInstruction: "",
+    interval: DEFAULT_INTERVAL,
     updatedAt: "",
   };
 }
@@ -35,23 +44,63 @@ function clearResearchState(ctx: any): ResearchState {
   return writeResearchState(ctx, defaultResearchState("autoresearch"));
 }
 
-function formatResearchState(state: ResearchState): string {
-  if (!state.instruction) {
-    return `${state.kind === "autoresearch-lab" ? "🧪 Autoresearch lab" : "🔎 Autoresearch"} is off.`;
+function label(kind: ResearchKind): string {
+  return kind === "autoresearch-lab" ? "🧪 Autoresearch lab" : "🔎 Autoresearch";
+}
+
+function buildResearchGoal(kind: ResearchKind, instruction: string): string {
+  if (kind === "autoresearch-lab") {
+    return [
+      `Autoresearch lab: ${instruction}`,
+      "Success criteria:",
+      "- split the scope into independent research lanes before changing code",
+      "- preserve isolated/non-overlapping work where possible",
+      "- evaluate candidate findings before merging them into the main path",
+      "- run checks after integration and summarize winning/losing hypotheses",
+    ].join("\n");
   }
 
-  const prefix = state.kind === "autoresearch-lab" ? "🧪 Autoresearch lab" : "🔎 Autoresearch";
-  return `${prefix}: ${truncate(state.instruction, 160)}`;
+  return [
+    `Autoresearch: ${instruction}`,
+    "Success criteria:",
+    "- make the target measurable; identify or create the benchmark/evaluation command when useful",
+    "- run iterative identify → implement → build/check → test/evaluate → sanity → log cycles",
+    "- preserve the benchmark/evaluation script as the durable product",
+    "- stop only when the metric/answer is materially improved and the result is summarized",
+  ].join("\n");
+}
+
+function buildResearchLoopInstruction(kind: ResearchKind, instruction: string): string {
+  if (kind === "autoresearch-lab") {
+    return [
+      "Run one autoresearch-lab cycle toward the active goal.",
+      `User instruction: ${instruction}`,
+      "Plan or update independent lanes, delegate/inspect where useful, evaluate candidate results, integrate only safe non-conflicting improvements, run checks, and log the next hypothesis.",
+    ].join("\n");
+  }
+
+  return [
+    "Run one autoresearch cycle toward the active goal.",
+    `User instruction: ${instruction}`,
+    "Measure or define the target, inspect evidence, make the highest-leverage safe change, run checks/evaluation, record the result, and choose the next hypothesis.",
+  ].join("\n");
+}
+
+function formatResearchState(state: ResearchState): string {
+  if (!state.instruction) {
+    return `${label(state.kind)} is off.`;
+  }
+
+  return `${label(state.kind)} active: ${truncate(state.instruction, 160)} — backed by /goal + /loop ${state.interval || DEFAULT_INTERVAL}`;
 }
 
 function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): void {
-  const isLab = commandName === "autoresearch-lab";
-  const prefix = isLab ? "🧪 Autoresearch lab" : "🔎 Autoresearch";
+  const prefix = label(commandName);
 
   pi.registerCommand(commandName, {
-    description: isLab
-      ? "Parallel multi-agent research mode for the current session"
-      : "Iterative optimization mode for the current session",
+    description: commandName === "autoresearch-lab"
+      ? "Parallel multi-agent research mode backed by goal + loop"
+      : "Iterative optimization/research mode backed by goal + loop",
     handler: async (args, ctx) => {
       const input = String(args ?? "").trim();
       const [cmd] = input.split(/\s+/);
@@ -63,8 +112,15 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
       }
 
       if (resolved === "clear") {
+        const previous = readResearchState(ctx);
         clearResearchState(ctx);
-        ctx.ui.notify(`${prefix} cleared.`, "info");
+        clearLoop(ctx);
+        const clearedGoal = Boolean(previous.goal && activeGoal(ctx) === previous.goal);
+        if (clearedGoal) {
+          clearGoal(ctx);
+          setGoalStatus(ctx, null);
+        }
+        ctx.ui.notify(`${prefix} cleared; underlying loop stopped${clearedGoal ? " and matching goal cleared" : ""}.`, "info");
         return;
       }
 
@@ -74,12 +130,25 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
         return;
       }
 
+      const goal = buildResearchGoal(commandName, instruction);
+      const loopInstruction = buildResearchLoopInstruction(commandName, instruction);
+      setGoal(ctx, goal);
+      setGoalStatus(ctx, goal);
+      const loop = startLoop(pi, ctx, DEFAULT_INTERVAL, loopInstruction, { triggerNow: true });
+      if (!loop) {
+        ctx.ui.notify(`${prefix} could not start: invalid loop interval.`, "error");
+        return;
+      }
+
       const next = writeResearchState(ctx, {
         kind: commandName,
         instruction,
+        goal,
+        loopInstruction,
+        interval: loop.interval,
         updatedAt: "",
       });
-      ctx.ui.notify(formatResearchState(next), "info");
+      ctx.ui.notify(`${formatResearchState(next)}. First cycle queued now.`, "info");
     },
   });
 }

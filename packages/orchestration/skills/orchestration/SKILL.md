@@ -41,9 +41,9 @@ Key behaviors to preserve:
 - keep the benchmark/evaluation script as the product
 
 Commands:
-- `/autoresearch <instruction>` — start or update the solo research flow
-- `/autoresearch status` — show research status
-- `/autoresearch clear` — clear it
+- `/autoresearch <instruction>` — start or update the solo research flow; this creates a research goal, starts a 5m loop, and queues the first cycle immediately
+- `/autoresearch status` — show research status and the underlying goal/loop backing
+- `/autoresearch clear` — clear it and stop its underlying loop
 
 ## Autoresearch lab
 
@@ -58,9 +58,9 @@ Key behaviors to preserve:
 - wave-based redesign when plateauing
 
 Commands:
-- `/autoresearch-lab <instruction>` — start or update the lab flow
-- `/autoresearch-lab status` — show lab status
-- `/autoresearch-lab clear` — clear it
+- `/autoresearch-lab <instruction>` — start or update the lab flow; this creates a lab-shaped goal, starts a 5m loop, and queues the first cycle immediately
+- `/autoresearch-lab status` — show lab status and the underlying goal/loop backing
+- `/autoresearch-lab clear` — clear it and stop its underlying loop
 
 ## Auto-detection and safety
 

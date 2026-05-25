@@ -12,18 +12,18 @@ type GoalHistoryEntry = {
   goal: string;
 };
 
-function activeGoal(ctx: any): string {
+export function activeGoal(ctx: any): string {
   return readText(sessionFile(FEATURE, ctx, CURRENT_FILE)).trim();
 }
 
-function setGoal(ctx: any, goal: string): void {
+export function setGoal(ctx: any, goal: string): void {
   const note = goal.trim();
   writeText(sessionFile(FEATURE, ctx, CURRENT_FILE), `${note}\n`);
   endGoalCheck(ctx);
   appendText(HISTORY_FILE, `${JSON.stringify({ at: new Date().toISOString(), goal: note })}\n`);
 }
 
-function clearGoal(ctx: any): void {
+export function clearGoal(ctx: any): void {
   writeText(sessionFile(FEATURE, ctx, CURRENT_FILE), "");
 }
 
@@ -35,7 +35,7 @@ function goalBlock(goal: string): string {
   ].join("\n");
 }
 
-function setGoalStatus(ctx: any, goal: string | null): void {
+export function setGoalStatus(ctx: any, goal: string | null): void {
   ctx.ui.setStatus("orchestration-goal", goal ? `🎯 ${truncate(goal, 60)}` : undefined);
 }
 
