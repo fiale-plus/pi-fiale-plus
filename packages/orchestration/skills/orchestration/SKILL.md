@@ -18,7 +18,7 @@ Use this skill to manage the current session workflow.
 ## Goal
 
 - `/goal` — show current goal (and refresh the goal status badge)
-- `/goal set <text>` — set the goal; loop ticks will ask whether it is done
+- `/goal set <text>` — set the goal; if a loop is active, the first completion check starts immediately
 - `/goal clear` — clear it
 - `/goal list` — recent history
 

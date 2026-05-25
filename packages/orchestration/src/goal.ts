@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendText, contentText, featureFile, readText, sessionFile, truncate, writeText } from "./internal.js";
 import { endGoalCheck, goalCheckResult, hasGoalCheckPending } from "./goal-resolution.js";
+import { triggerLoopTick } from "./loop.js";
 
 const FEATURE = "orchestration";
 const CURRENT_FILE = "goal.md";
@@ -146,6 +147,7 @@ export function registerGoal(pi: ExtensionAPI): void {
 
       setGoal(ctx, text);
       setGoalStatus(ctx, text);
+      triggerLoopTick(pi, ctx);
       ctx.ui.notify(`🎯 Goal set: ${truncate(text, 160)}`, "info");
     },
   });
