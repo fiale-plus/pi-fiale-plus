@@ -1,15 +1,30 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendText, contentText, featureFile, readText, sessionFile, truncate, writeText } from "./internal.js";
+import { shouldHoldResearchOpen, type ResearchCheckResult } from "./autoresearch-completion.js";
 import { endGoalCheck, goalCheckResult, hasGoalCheckPending } from "./goal-resolution.js";
-import { triggerLoopTick } from "./loop.js";
+import { clearLoop, triggerLoopTick } from "./loop.js";
+import { readSessionJson, writeSessionJson } from "./state.js";
 
 const FEATURE = "orchestration";
 const CURRENT_FILE = "goal.md";
+const RESEARCH_FILE = "autoresearch.json";
 const HISTORY_FILE = featureFile(FEATURE, "goal-history.jsonl");
 
 type GoalHistoryEntry = {
   at: string;
   goal: string;
+};
+
+type ResearchState = {
+  kind?: "autoresearch" | "autoresearch-lab";
+  instruction?: string;
+  goal?: string;
+  loopInstruction?: string;
+  interval?: string;
+  cycles?: number;
+  doneAttempts?: number;
+  lastResult?: "done" | "continue" | "unknown";
+  updatedAt?: string;
 };
 
 export function activeGoal(ctx: any): string {
@@ -62,6 +77,46 @@ function assistantText(event: any): string {
   return contentText(lastAssistant?.content);
 }
 
+function readResearchState(ctx: any): ResearchState {
+  return readSessionJson<ResearchState>(FEATURE, ctx, RESEARCH_FILE, {});
+}
+
+function writeResearchState(ctx: any, state: ResearchState): void {
+  writeSessionJson(FEATURE, ctx, RESEARCH_FILE, { ...state, updatedAt: new Date().toISOString() });
+}
+
+function clearResearchState(ctx: any): void {
+  writeSessionJson(FEATURE, ctx, RESEARCH_FILE, {
+    kind: "autoresearch",
+    instruction: "",
+    goal: "",
+    loopInstruction: "",
+    interval: "5m",
+    cycles: 0,
+    doneAttempts: 0,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function researchForGoal(ctx: any, goal: string): ResearchState | null {
+  const state = readResearchState(ctx);
+  if (!state.instruction || !state.goal || state.goal !== goal) return null;
+  return state;
+}
+
+export function recordResearchCheck(ctx: any, state: ResearchState, result: ResearchCheckResult): ResearchState {
+  const cycles = (state.cycles ?? 0) + 1;
+  const doneAttempts = (state.doneAttempts ?? 0) + (result === "done" ? 1 : 0);
+  const next: ResearchState = {
+    ...state,
+    cycles,
+    doneAttempts,
+    lastResult: result,
+  };
+  writeResearchState(ctx, next);
+  return next;
+}
+
 export function registerGoal(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     endGoalCheck(ctx);
@@ -82,12 +137,24 @@ export function registerGoal(pi: ExtensionAPI): void {
     const result = goalCheckResult(text);
     endGoalCheck(ctx);
 
+    const research = researchForGoal(ctx, goal);
+    const recordedResearch = research ? recordResearchCheck(ctx, research, result) : null;
+    const holdReason = recordedResearch ? shouldHoldResearchOpen(recordedResearch, result, text) : null;
+    if (holdReason) {
+      ctx.ui.notify(`🔎 Autoresearch continuing: ${holdReason}.`, "info");
+      return;
+    }
+
     if (result !== "done") {
       return;
     }
 
     clearGoal(ctx);
     setGoalStatus(ctx, null);
+    if (recordedResearch) {
+      clearResearchState(ctx);
+      clearLoop(ctx);
+    }
     ctx.ui.notify(`🎯 Goal completed: ${truncate(goal, 160)}`, "info");
   });
 
