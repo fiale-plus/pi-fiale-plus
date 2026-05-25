@@ -1,5 +1,5 @@
 {
   "packages": [
-    "../packages/advisor"
+    "npm:@fiale-plus/pi-rogue-advisor"
   ]
 }
