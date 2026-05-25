@@ -81,6 +81,43 @@ function stopLoopTimer(key: string): void {
   }
 }
 
+function runLoopTick(pi: ExtensionAPI, ctx: any): boolean {
+  const key = sessionKey(ctx);
+  const current = readLoopState(ctx);
+  if (!current.enabled || !current.instruction) {
+    stopLoopTimer(key);
+    setLoopStatus(ctx, current);
+    return false;
+  }
+
+  const currentIntervalMs = parseIntervalMs(current.interval);
+  if (currentIntervalMs === null) {
+    stopLoopTimer(key);
+    setLoopStatus(ctx, current);
+    ctx.ui.notify("Loop interval must be at least 1m (e.g. 1m, 5m, 1h).", "warning");
+    return false;
+  }
+
+  if (activeGoal(ctx) && hasGoalCheckPending(ctx)) {
+    return false;
+  }
+
+  const goal = activeGoal(ctx);
+  const prompt = goal ? buildGoalCheckPrompt(goal, current.instruction) : current.instruction;
+  ctx.ui.notify(goal ? `🎯 Goal check: ${truncate(goal, 80)}` : `↻ Loop tick: ${truncate(current.instruction, 80)}`, "info");
+  if (goal) {
+    beginGoalCheck(ctx);
+  }
+
+  if (ctx.isIdle()) {
+    pi.sendUserMessage(prompt);
+  } else {
+    pi.sendUserMessage(prompt, { deliverAs: "followUp" });
+  }
+
+  return true;
+}
+
 function syncLoopTimer(pi: ExtensionAPI, ctx: any): void {
   const key = sessionKey(ctx);
   stopLoopTimer(key);
@@ -98,38 +135,20 @@ function syncLoopTimer(pi: ExtensionAPI, ctx: any): void {
   }
 
   const tick = () => {
-    const current = readLoopState(ctx);
-    if (!current.enabled || !current.instruction) {
-      stopLoopTimer(key);
-      setLoopStatus(ctx, current);
-      return;
-    }
-
-    const currentIntervalMs = parseIntervalMs(current.interval);
+    const currentIntervalMs = parseIntervalMs(readLoopState(ctx).interval);
     if (currentIntervalMs === null || currentIntervalMs !== intervalMs) {
       syncLoopTimer(pi, ctx);
       return;
     }
 
-    if (activeGoal(ctx) && hasGoalCheckPending(ctx)) {
-      return;
-    }
-
-    const goal = activeGoal(ctx);
-    const prompt = goal ? buildGoalCheckPrompt(goal, current.instruction) : current.instruction;
-    ctx.ui.notify(goal ? `🎯 Goal check: ${truncate(goal, 80)}` : `↻ Loop tick: ${truncate(current.instruction, 80)}`, "info");
-    if (goal) {
-      beginGoalCheck(ctx);
-    }
-
-    if (ctx.isIdle()) {
-      pi.sendUserMessage(prompt);
-    } else {
-      pi.sendUserMessage(prompt, { deliverAs: "followUp" });
-    }
+    runLoopTick(pi, ctx);
   };
 
   loopTimers.set(key, setInterval(tick, intervalMs));
+}
+
+export function triggerLoopTick(pi: ExtensionAPI, ctx: any): boolean {
+  return runLoopTick(pi, ctx);
 }
 
 export function registerLoop(pi: ExtensionAPI): void {
