@@ -4,7 +4,7 @@ import { readSessionJson, writeSessionJson } from "./state.js";
 
 const FEATURE = "orchestration";
 const LOOP_FILE = "loop.json";
-const MIN_INTERVAL_MS = 1000;
+const MIN_INTERVAL_MS = 60_000;
 const loopTimers = new Map<string, NodeJS.Timeout>();
 
 type LoopState = {
@@ -87,7 +87,7 @@ function syncLoopTimer(pi: ExtensionAPI, ctx: any): void {
 
   const intervalMs = parseIntervalMs(state.interval);
   if (intervalMs === null) {
-    ctx.ui.notify("Loop interval must be at least 1s (e.g. 10s, 1m, 2500ms).", "warning");
+    ctx.ui.notify("Loop interval must be at least 1m (e.g. 1m, 5m, 1h).", "warning");
     return;
   }
 
@@ -149,7 +149,7 @@ export function registerLoop(pi: ExtensionAPI): void {
       const interval = cmd;
       const instruction = rest.join(" ").trim();
       if (!interval || !instruction || parseIntervalMs(interval) === null) {
-        ctx.ui.notify("Usage: /loop <interval> <instruction> (e.g. 10s, 1m, 2500ms)", "error");
+        ctx.ui.notify("Usage: /loop <interval> <instruction> (e.g. 1m, 5m, 1h)", "error");
         return;
       }
 
