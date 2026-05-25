@@ -29,7 +29,7 @@ function activeGoal(ctx: any): string {
   return readText(sessionFile(FEATURE, ctx, GOAL_FILE)).trim();
 }
 
-function readLoopState(ctx: any): LoopState {
+export function readLoopState(ctx: any): LoopState {
   return readSessionJson(FEATURE, ctx, LOOP_FILE, defaultLoopState());
 }
 
@@ -41,6 +41,13 @@ function writeLoopState(ctx: any, state: LoopState): LoopState {
 
 function clearLoopState(ctx: any): LoopState {
   return writeLoopState(ctx, defaultLoopState());
+}
+
+export function clearLoop(ctx: any): LoopState {
+  const next = clearLoopState(ctx);
+  stopLoopTimer(sessionKey(ctx));
+  setLoopStatus(ctx, next);
+  return next;
 }
 
 function parseIntervalMs(interval: string): number | null {
@@ -147,6 +154,25 @@ function syncLoopTimer(pi: ExtensionAPI, ctx: any): void {
   loopTimers.set(key, setInterval(tick, intervalMs));
 }
 
+export function startLoop(pi: ExtensionAPI, ctx: any, interval: string, instruction: string, options: { triggerNow?: boolean } = {}): LoopState | null {
+  if (!interval || !instruction || parseIntervalMs(interval) === null) {
+    return null;
+  }
+
+  const next = writeLoopState(ctx, {
+    enabled: true,
+    interval,
+    instruction,
+    updatedAt: "",
+  });
+  setLoopStatus(ctx, next);
+  syncLoopTimer(pi, ctx);
+  if (options.triggerNow) {
+    triggerLoopTick(pi, ctx);
+  }
+  return next;
+}
+
 export function triggerLoopTick(pi: ExtensionAPI, ctx: any): boolean {
   return runLoopTick(pi, ctx);
 }
@@ -174,9 +200,7 @@ export function registerLoop(pi: ExtensionAPI): void {
       }
 
       if (resolved === "off" || resolved === "clear" || resolved === "stop") {
-        const next = clearLoopState(ctx);
-        stopLoopTimer(sessionKey(ctx));
-        setLoopStatus(ctx, next);
+        const next = clearLoop(ctx);
         ctx.ui.notify(next.enabled ? formatLoopState(next) : "Loop cleared.", "info");
         return;
       }
@@ -188,14 +212,11 @@ export function registerLoop(pi: ExtensionAPI): void {
         return;
       }
 
-      const next = writeLoopState(ctx, {
-        enabled: true,
-        interval,
-        instruction,
-        updatedAt: "",
-      });
-      setLoopStatus(ctx, next);
-      syncLoopTimer(pi, ctx);
+      const next = startLoop(pi, ctx, interval, instruction);
+      if (!next) {
+        ctx.ui.notify("Usage: /loop <interval> <instruction> (e.g. 1m, 5m, 1h)", "error");
+        return;
+      }
       ctx.ui.notify(formatLoopState(next), "info");
     },
   });

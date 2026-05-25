@@ -19,9 +19,9 @@ export function buildGoalCheckPrompt(goal: string, instruction: string): string 
     "Goal check:",
     `Current goal: ${goal}`,
     "Are we done? Ignore step/phase details; judge only whether the goal itself is complete.",
-    "If done, reply exactly with `GOAL_DONE: <short reason>`.",
-    "If not done, reply exactly with `GOAL_CONTINUE: <short reason>` and continue working.",
-    instruction ? `Current loop instruction: ${truncate(instruction, 200)}` : "",
+    "If done, start your response with `GOAL_DONE: <short reason>` and summarize final state.",
+    "If not done, start your response with `GOAL_CONTINUE: <short reason>` and then continue working.",
+    instruction ? `Current loop instruction: ${truncate(instruction, 400)}` : "",
   ]
     .filter(Boolean)
     .join("\n");
