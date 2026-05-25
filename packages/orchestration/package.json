@@ -1,20 +1,20 @@
 {
-  "name": "@fiale-plus/pi-goal",
+  "name": "@fiale-plus/pi-orchestration",
   "version": "0.1.0",
-  "description": "Session goal tracking extension for PiRogue.",
+  "description": "Orchestration controls for PiRogue: loop, goal, and autoresearch.",
   "type": "module",
   "license": "MIT",
   "keywords": [
     "pi-package"
   ],
   "private": true,
-  "main": "./src/index.ts",
+  "main": "./orchestration/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./orchestration/index.ts"
   },
   "pi": {
     "extensions": [
-      "./src/extension.ts"
+      "./orchestration"
     ],
     "skills": [
       "./skills"
@@ -28,5 +28,12 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "files": [
+    "orchestration",
+    "src",
+    "skills",
+    "README.md",
+    "package.json"
+  ]
 }

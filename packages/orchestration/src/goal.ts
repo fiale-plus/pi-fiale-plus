@@ -1,28 +1,35 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { appendText, featureFile, readText, sessionFile, truncate, writeText } from "@fiale-plus/pi-core";
+import { appendText, featureFile, truncate, readText } from "@fiale-plus/pi-core";
+import { readSessionText, writeSessionText } from "./state.js";
 
-const FEATURE = "goal";
-const HISTORY_FILE = featureFile(FEATURE, "history.jsonl");
+const FEATURE = "orchestration";
+const CURRENT_FILE = "goal.md";
+const HISTORY_FILE = featureFile(FEATURE, "goal-history.jsonl");
+
+type GoalHistoryEntry = {
+  at: string;
+  goal: string;
+};
 
 function activeGoal(ctx: any): string {
-  return readText(sessionFile(FEATURE, ctx, "current.md")).trim();
+  return readSessionText(FEATURE, ctx, CURRENT_FILE);
 }
 
 function setGoal(ctx: any, goal: string): void {
   const note = goal.trim();
-  writeText(sessionFile(FEATURE, ctx, "current.md"), `${note}\n`);
+  writeSessionText(FEATURE, ctx, CURRENT_FILE, note);
   appendText(HISTORY_FILE, `${JSON.stringify({ at: new Date().toISOString(), goal: note })}\n`);
 }
 
 function clearGoal(ctx: any): void {
-  writeText(sessionFile(FEATURE, ctx, "current.md"), "");
+  writeSessionText(FEATURE, ctx, CURRENT_FILE, "");
 }
 
 function goalBlock(goal: string): string {
-  return [`## PiRogue Goal`, `Current goal: ${goal}`].join("\n");
+  return ["## PiRogue Goal", `Current goal: ${goal}`].join("\n");
 }
 
-function historyEntries(): Array<{ at: string; goal: string }> {
+function historyEntries(): GoalHistoryEntry[] {
   const raw = readText(HISTORY_FILE).trim();
   if (!raw) return [];
 
@@ -32,7 +39,7 @@ function historyEntries(): Array<{ at: string; goal: string }> {
     .slice(-10)
     .map((line) => {
       try {
-        return JSON.parse(line) as { at: string; goal: string };
+        return JSON.parse(line) as GoalHistoryEntry;
       } catch {
         return { at: new Date().toISOString(), goal: line };
       }
@@ -94,8 +101,4 @@ export function registerGoal(pi: ExtensionAPI): void {
       ctx.ui.notify(`🎯 Goal set: ${truncate(text, 160)}`, "info");
     },
   });
-}
-
-export default function goalExtension(pi: ExtensionAPI): void {
-  registerGoal(pi);
 }
