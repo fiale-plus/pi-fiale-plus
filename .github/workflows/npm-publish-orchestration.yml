@@ -30,7 +30,7 @@ jobs:
       - name: Sync orchestration package version from release tag
         working-directory: packages/orchestration
         run: |
-          RAW_TAG="${GITHUB_REF_NAME}"
+          RAW_TAG="${GITHUB_REF_NAME#orchestration-}"
           VERSION="${RAW_TAG#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           echo "Synced packages/orchestration/package.json to $VERSION"
