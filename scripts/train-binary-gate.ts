@@ -35,7 +35,7 @@ function extractFeatures(text: string) {
   if (toks.length > 1) inc(counts, `pref2:${toks.slice(0, 2).join("_")}`);
   if (toks.length > 2) inc(counts, `pref3:${toks.slice(0, 3).join("_")}`);
   if (text.includes("?")) inc(counts, "cue:question_mark");
-  const cues = ["check","why","what","how","should","status","stats","log","logs","review","diff","pr","build","run","test","deploy","fix","debug","install","configure","plan","continue","resume","compact","research","update","patch","cleanup","remove"];
+  const cues = ["check","why","what","how","should","status","stats","log","logs","review","diff","pr","build","run","test","deploy","debug","install","configure","plan","continue","resume","compact","research","update","patch","cleanup","remove"];
   const multi = ["what is","what's","safe to use","pull request","model family","how does","next step","path forward","should we","what should"];
   const ts = new Set(toks);
   for (const c of cues) if (ts.has(c)) inc(counts, `cue:${c}`);

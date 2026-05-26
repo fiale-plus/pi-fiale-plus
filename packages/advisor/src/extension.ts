@@ -455,7 +455,7 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
   const reviewHeuristic = heuristicRoute(reviewInput);
   const gatePrediction = binaryGatePredict(reviewInput.text);
   let reviewRoute = reviewHeuristic;
-  if (gatePrediction && gatePrediction.confidence >= 0.55 && !reviewHeuristic.safety) {
+  if (gatePrediction && gatePrediction.confidence >= 0.70 && !reviewHeuristic.safety) {
     const binLabel = gatePrediction.decision === "continue" ? "continue" as const : "escalate_to_advisor" as const;
     reviewRoute = {
       ...reviewHeuristic,
@@ -471,7 +471,7 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
   state.router.review = reviewRoute;
   saveState(state);
 
-  if (gatePrediction && gatePrediction.confidence >= 0.55 && gatePrediction.decision === "continue" && !reviewHeuristic.safety) {
+  if (gatePrediction && gatePrediction.confidence >= 0.70 && gatePrediction.decision === "continue" && !reviewHeuristic.safety) {
     return;
   }
 
@@ -593,7 +593,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
     const gatePrediction = binaryGatePredict(routeInput.text);
     const heuristic = heuristicRoute(routeInput);
     let route: AdvisorRouteDecision;
-    if (gatePrediction && gatePrediction.confidence >= 0.55) {
+    if (gatePrediction && gatePrediction.confidence >= 0.70) {
       const binLabel = gatePrediction.decision === "continue" ? "continue" as const : "escalate_to_advisor" as const;
       if (heuristic.safety) {
         route = heuristic;
