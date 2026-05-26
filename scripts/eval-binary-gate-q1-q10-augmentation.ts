@@ -141,11 +141,14 @@ function train(rows: Row[]) {
 }
 function evaluate(model: ReturnType<typeof train>, rows: Row[]) {
   let correct = 0;
+  const misses: Array<{ id?: string; text: string; label: Label; pred: Label; source: string; policyRule?: string }> = [];
   for (const row of rows) {
     const x = model.vec(features(row.text)); const scores = model.bias.slice(); for (let c = 0; c < 2; c++) for (const [i, v] of x) scores[c] += model.weights[c][i] * v;
-    const pred = LABELS[scores[0] >= scores[1] ? 0 : 1]; if (pred === row.label) correct++;
+    const pred = LABELS[scores[0] >= scores[1] ? 0 : 1];
+    if (pred === row.label) correct++;
+    else misses.push({ id: row.id, text: row.text, label: row.label, pred, source: row.source, policyRule: (row as Row & { policyRule?: string }).policyRule });
   }
-  return { accuracy: correct / rows.length, correct, total: rows.length };
+  return { accuracy: correct / rows.length, correct, total: rows.length, misses };
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -180,8 +183,11 @@ const results = policies.map((policy) => {
   return { policy: policy.name, avgTrainRows: Math.round(folds.reduce((s, f) => s + f.trainRows, 0) / folds.length), conflictAccuracy: avg("conflict"), goldAccuracy: avg("gold"), sessionAccuracy: avg("session"), folds };
 });
 const outputRows = resolved.map((r) => ({ id: r.id, text: r.text, label: r.label, source: r.source, sourceLabel: r.currentGoldLabel, pair: r.pair, policyRule: r.policyRule, action: r.action }));
-const report = { rows: { nonGold: nonGold.length, goldNonConflict: goldNonConflict.length, conflicts: resolved.length, reviewed: reviewedRows.length }, reviewed: { sourceCounts: countBy(reviewedRows, (r) => r.source), labelCounts: countBy(reviewedRows, (r) => r.label) }, resolution: { actionCounts: countBy(resolved, (r) => r.action), ruleCounts: countBy(resolved, (r) => r.policyRule), resolvedCounts: countBy(resolved, (r) => r.label) }, results };
+const selectedResult = results[results.length - 1];
+const conflictMisses = selectedResult.folds.flatMap((fold, foldIndex) => fold.conflict.misses.map((miss) => ({ policy: selectedResult.policy, fold: foldIndex + 1, ...miss })));
+const report = { rows: { nonGold: nonGold.length, goldNonConflict: goldNonConflict.length, conflicts: resolved.length, reviewed: reviewedRows.length }, reviewed: { sourceCounts: countBy(reviewedRows, (r) => r.source), labelCounts: countBy(reviewedRows, (r) => r.label) }, resolution: { actionCounts: countBy(resolved, (r) => r.action), ruleCounts: countBy(resolved, (r) => r.policyRule), resolvedCounts: countBy(resolved, (r) => r.label) }, missAnalysis: { selectedPolicy: selectedResult.policy, conflictMisses: conflictMisses.length, missLabelCounts: countBy(conflictMisses, (r) => `${r.label}->${r.pred}`), missRuleCounts: countBy(conflictMisses, (r) => r.policyRule || "unknown") }, results };
 fs.writeFileSync(path.join(DIR, "binary-q1-q10-resolved-conflicts.jsonl"), outputRows.map((r) => JSON.stringify(r)).join("\n") + "\n", "utf8");
+fs.writeFileSync(path.join(DIR, "binary-q1-q10-conflict-misses.jsonl"), conflictMisses.map((r) => JSON.stringify(r)).join("\n") + (conflictMisses.length ? "\n" : ""), "utf8");
 fs.writeFileSync(path.join(DIR, "binary-q1-q10-augmentation-report.json"), JSON.stringify(report, null, 2) + "\n", "utf8");
 const md = [
   "# Binary Q1-Q10 augmentation report", "", "The Q1-Q10 rules are used as label-generation provenance only; the evaluated candidate trains the binary model on resolved labels rather than using a runtime policy overlay.", "",
@@ -189,8 +195,12 @@ const md = [
   `- reviewed augmentation rows: ${reviewedRows.length}`,
   `- relabel by policy: ${report.resolution.actionCounts.relabel_by_policy || 0}`,
   `- no-rule kept as current gold: ${report.resolution.actionCounts.manual_review_keep_current_gold_for_now || 0}`,
+  `- selected-policy conflict misses: ${report.missAnalysis.conflictMisses}`,
   "", "| Policy | Avg train rows | Conflict CV acc | Gold non-conflict CV acc | Session sample acc |", "|---|---:|---:|---:|---:|",
   ...results.map((r) => `| ${r.policy} | ${r.avgTrainRows} | ${(r.conflictAccuracy * 100).toFixed(1)}% | ${(r.goldAccuracy * 100).toFixed(1)}% | ${(r.sessionAccuracy * 100).toFixed(1)}% |`),
+  "", "## Conflict misses for selected policy", "",
+  ...Object.entries(report.missAnalysis.missRuleCounts).sort((a, b) => b[1] - a[1]).map(([rule, n]) => `- ${rule}: ${n}`),
+  "", "Miss rows are written to `data/routing/binary-q1-q10-conflict-misses.jsonl` for contrastive hard-negative follow-up.",
   "", "## Recommendation", "", "Do not ship a runtime policy overlay. If this path is promoted later, use the resolved Q1-Q10 rows as training/eval data so the model internalizes as much of the policy as possible.", "",
 ].join("\n");
 fs.writeFileSync(path.join(DIR, "binary-q1-q10-augmentation-report.md"), md, "utf8");
