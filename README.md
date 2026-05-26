@@ -14,7 +14,13 @@ Published surface:
 |---|---|---|---|---|
 | Advisor | `@fiale-plus/pi-rogue-advisor` | [![advisor version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | [![advisor downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | Strategic advisor + phase-aware routing + optional check-ins |
 | Orchestrator | `@fiale-plus/pi-rogue-orchestration` | [![orchestration version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | [![orchestration downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | Loop, goal, and autoresearch controls |
-| Bundle | `@fiale-plus/pi-rogue-bundle` | [![bundle version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-bundle?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-bundle) | [![bundle downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-bundle?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-bundle) | Umbrella package for advisor + orchestration |
+
+Upcoming surface:
+
+| Surface | Package | NPM Version | NPM Downloads | What it is |
+|---|---|---|---|---|
+| Bundle | `@fiale-plus/pi-rogue-bundle` | n/a *(not yet published)* | n/a | Umbrella package for advisor + orchestration |
+
 
 Lab / greenhouse (unreleased internal helper packages):
 
@@ -29,13 +35,14 @@ Lab / greenhouse (unreleased internal helper packages):
 ### Published packages (recommended)
 
 ```bash
-# umbrella
-pi install npm:@fiale-plus/pi-rogue-bundle
-
 # individual surfaces
 pi install npm:@fiale-plus/pi-rogue-advisor
 pi install npm:@fiale-plus/pi-rogue-orchestration
 ```
+
+### Umbrella package
+
+`@fiale-plus/pi-rogue-bundle` is prepared as the umbrella package. It is currently available via the workspace package (`npm install` at repo root) and will be published as a dedicated release step.
 
 ### Local workspace / lab
 

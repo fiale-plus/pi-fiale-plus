@@ -39,4 +39,4 @@ Prefer the changelog entry to be done before the release is cut, not after.
 ## Greenhouse status
 
 Internal helper packages (`pi-rogue-guardrails`, `pi-rogue-brain`, `pi-rogue-repo-arch`) remain lab/greenhouse scope and are not published.
-`@fiale-plus/pi-rogue-bundle` is the published umbrella for advisor + orchestrator logic.
+`@fiale-plus/pi-rogue-bundle` is the prepared umbrella for advisor + orchestrator logic and is released via the `pi-rogue-bundle-<semver>` wave after upstream logic surfaces are updated.

@@ -48,7 +48,7 @@ When this release updates both logic packages and the bundle:
 - Tag format: `<component>-<semver>`
 - Release title: `<semver>`
 - Use the component prefix in the tag, not in the title.
-- Internal/experimental umbrella code is labeled as the PiRogue greenhouse, not published as a release.
+- Internal helper packages (guardrails/brain/repo-arch) remain lab/greenhouse and are not published independently.
 
 ## Notes
 

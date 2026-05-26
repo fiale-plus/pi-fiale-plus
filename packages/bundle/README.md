@@ -1,6 +1,6 @@
 # PiRogue Bundle
 
-`@fiale-plus/pi-rogue-bundle` is the published umbrella package that stitches together:
+`@fiale-plus/pi-rogue-bundle` is the prepared umbrella package that stitches together:
 
 - `@fiale-plus/pi-rogue-advisor`
 - `@fiale-plus/pi-rogue-orchestration`
@@ -10,9 +10,9 @@ It is a thin, official surface for local usage when you want one install and bot
 ## Install
 
 ```bash
-pi install npm:@fiale-plus/pi-rogue-bundle
-# or
-npm install @fiale-plus/pi-rogue-bundle
+# from repo root (workspace install)
+npm install
+# and then use workspace packages as needed
 ```
 
 ## Scope boundaries
@@ -27,6 +27,6 @@ npm install @fiale-plus/pi-rogue-bundle
 
 ## Status
 
-- **Published?** Yes
-- **NPM version/downloads:** available via npm
+- **Published?** In progress (prepared package)
+- **NPM version/downloads:** not yet published (no registry entry yet)
 - **Stability:** public surface; no extra internal helper behavior
