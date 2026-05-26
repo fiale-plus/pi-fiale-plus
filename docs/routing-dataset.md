@@ -96,6 +96,14 @@ npm run binary:train
 
 Builds the binary gate dataset from gold + Pi + Claude sessions, then trains TF-IDF + logistic regression. Model saved to `data/routing/binary-gate-model.json`.
 
+## Compare conflict policies
+
+```bash
+npm run binary:eval-conflict-policies
+```
+
+This read-only decision gate compares `keep`, `drop-from-train`, and `drop-from-all` for exact gold-vs-heuristic conflicts across random split, gold holdout, and source holdout. Use it to choose whether conflict handling should be removal, relabeling, down-weighting, or source-prioritization before training/integration.
+
 ## Benchmark
 
 ```bash
