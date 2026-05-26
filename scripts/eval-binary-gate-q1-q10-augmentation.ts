@@ -17,18 +17,23 @@ type ResolvedConflict = Row & {
   action: "accept_gold" | "relabel_by_policy" | "manual_review_keep_current_gold_for_now";
 };
 
-type Args = { reviewed: string[] };
+type Args = { reviewed: string[]; conflictOverrides: string[] };
+
+type ConflictOverride = { id?: string; sourceId?: string; label: Label; originalLabel?: Label };
 
 function parseArgs(argv: string[]): Args {
   const reviewed: string[] = [];
+  const conflictOverrides: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg !== "--reviewed") continue;
+    if (arg !== "--reviewed" && arg !== "--conflict-overrides") continue;
     const value = argv[++i];
-    if (!value) throw new Error("--reviewed requires a JSONL file path or comma-separated paths");
-    reviewed.push(...value.split(",").map((file) => file.trim()).filter(Boolean));
+    if (!value) throw new Error(`${arg} requires a JSONL file path or comma-separated paths`);
+    const files = value.split(",").map((file) => file.trim()).filter(Boolean);
+    if (arg === "--reviewed") reviewed.push(...files);
+    else conflictOverrides.push(...files);
   }
-  return { reviewed };
+  return { reviewed, conflictOverrides };
 }
 
 function readJsonl<T>(file: string): T[] {
@@ -56,6 +61,17 @@ function readReviewedRows(files: string[]): Row[] {
     if (!text) throw new Error(`Missing reviewed text in ${file}:${index + 1}`);
     return { id: row.id ? String(row.id) : `${path.basename(file)}:${index + 1}`, text, label, source: row.source ? String(row.source) : "q1_q10_reviewed" };
   }));
+}
+function readConflictOverrides(files: string[]): Map<string, ConflictOverride> {
+  const overrides = new Map<string, ConflictOverride>();
+  for (const file of files) for (const [index, row] of readJsonl<any>(file).entries()) {
+    const label = row.label as Label;
+    if (!LABELS.includes(label)) throw new Error(`Invalid conflict override label in ${file}:${index + 1}: ${String(row.label)}`);
+    const key = row.sourceId ? String(row.sourceId) : row.id ? String(row.id) : "";
+    if (!key) throw new Error(`Missing conflict override id/sourceId in ${file}:${index + 1}`);
+    overrides.set(key, { id: row.id ? String(row.id) : undefined, sourceId: row.sourceId ? String(row.sourceId) : undefined, label, originalLabel: LABELS.includes(row.originalLabel) ? row.originalLabel : undefined });
+  }
+  return overrides;
 }
 
 function q1q10Policy(text: string): { label?: Label; rule: string } {
@@ -153,7 +169,13 @@ function evaluate(model: ReturnType<typeof train>, rows: Row[]) {
 
 const args = parseArgs(process.argv.slice(2));
 const binary = readJsonl<any>(path.join(DIR, "binary-gate.jsonl")).map((r) => ({ text: String(r.text), label: r.label as Label, source: String(r.source) }));
-const resolved = resolveConflicts();
+const baseResolved = resolveConflicts();
+const conflictOverrides = readConflictOverrides(args.conflictOverrides);
+const resolved = baseResolved.map((row) => {
+  const override = conflictOverrides.get(row.id);
+  return override ? { ...row, label: override.label, source: "q1_q10_resolved_conflict_label_override" } : row;
+});
+const appliedConflictOverrides = resolved.filter((row, index) => row.label !== baseResolved[index].label);
 const reviewedRows = readReviewedRows(args.reviewed);
 const conflictKeys = new Set(resolved.map((r) => normalize(r.text)));
 const nonGold = binary.filter((r) => r.source !== "gold");
@@ -185,7 +207,7 @@ const results = policies.map((policy) => {
 const outputRows = resolved.map((r) => ({ id: r.id, text: r.text, label: r.label, source: r.source, sourceLabel: r.currentGoldLabel, pair: r.pair, policyRule: r.policyRule, action: r.action }));
 const selectedResult = results[results.length - 1];
 const conflictMisses = selectedResult.folds.flatMap((fold, foldIndex) => fold.conflict.misses.map((miss) => ({ policy: selectedResult.policy, fold: foldIndex + 1, ...miss })));
-const report = { rows: { nonGold: nonGold.length, goldNonConflict: goldNonConflict.length, conflicts: resolved.length, reviewed: reviewedRows.length }, reviewed: { sourceCounts: countBy(reviewedRows, (r) => r.source), labelCounts: countBy(reviewedRows, (r) => r.label) }, resolution: { actionCounts: countBy(resolved, (r) => r.action), ruleCounts: countBy(resolved, (r) => r.policyRule), resolvedCounts: countBy(resolved, (r) => r.label) }, missAnalysis: { selectedPolicy: selectedResult.policy, conflictMisses: conflictMisses.length, missLabelCounts: countBy(conflictMisses, (r) => `${r.label}->${r.pred}`), missRuleCounts: countBy(conflictMisses, (r) => r.policyRule || "unknown") }, results };
+const report = { rows: { nonGold: nonGold.length, goldNonConflict: goldNonConflict.length, conflicts: resolved.length, reviewed: reviewedRows.length }, reviewed: { sourceCounts: countBy(reviewedRows, (r) => r.source), labelCounts: countBy(reviewedRows, (r) => r.label) }, conflictOverrides: { requested: conflictOverrides.size, applied: appliedConflictOverrides.length, changedIds: appliedConflictOverrides.map((row) => row.id) }, resolution: { actionCounts: countBy(resolved, (r) => r.action), ruleCounts: countBy(resolved, (r) => r.policyRule), resolvedCounts: countBy(resolved, (r) => r.label) }, missAnalysis: { selectedPolicy: selectedResult.policy, conflictMisses: conflictMisses.length, missLabelCounts: countBy(conflictMisses, (r) => `${r.label}->${r.pred}`), missRuleCounts: countBy(conflictMisses, (r) => r.policyRule || "unknown") }, results };
 fs.writeFileSync(path.join(DIR, "binary-q1-q10-resolved-conflicts.jsonl"), outputRows.map((r) => JSON.stringify(r)).join("\n") + "\n", "utf8");
 fs.writeFileSync(path.join(DIR, "binary-q1-q10-conflict-misses.jsonl"), conflictMisses.map((r) => JSON.stringify(r)).join("\n") + (conflictMisses.length ? "\n" : ""), "utf8");
 fs.writeFileSync(path.join(DIR, "binary-q1-q10-augmentation-report.json"), JSON.stringify(report, null, 2) + "\n", "utf8");
@@ -193,6 +215,7 @@ const md = [
   "# Binary Q1-Q10 augmentation report", "", "The Q1-Q10 rules are used as label-generation provenance only; the evaluated candidate trains the binary model on resolved labels rather than using a runtime policy overlay.", "",
   `- conflicts: ${resolved.length}`,
   `- reviewed augmentation rows: ${reviewedRows.length}`,
+  `- conflict label overrides applied: ${appliedConflictOverrides.length}`,
   `- relabel by policy: ${report.resolution.actionCounts.relabel_by_policy || 0}`,
   `- no-rule kept as current gold: ${report.resolution.actionCounts.manual_review_keep_current_gold_for_now || 0}`,
   `- selected-policy conflict misses: ${report.missAnalysis.conflictMisses}`,

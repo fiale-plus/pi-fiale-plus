@@ -146,6 +146,14 @@ To evaluate reviewed augmentation rows from JSONL files, pass one or more paths:
 npm run binary:eval-q1-q10 -- --reviewed /tmp/q1-q10-reviewed-batch-1.jsonl,/tmp/q1-q10-reviewed-batch-2.jsonl
 ```
 
+To evaluate audited conflict-label fixes from hard-negative review, pass override JSONL with `sourceId`/`id` and `label`:
+
+```bash
+npm run binary:eval-q1-q10 -- \
+  --reviewed /tmp/q1-q10-reviewed-all.jsonl \
+  --conflict-overrides /tmp/q1-q10-hard-negative-reviewed-all.jsonl
+```
+
 ## Build Q1-Q10 conflict-like review queue
 
 ```bash
