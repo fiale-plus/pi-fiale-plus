@@ -14,6 +14,7 @@
     "routing:queue": "tsx scripts/build-routing-label-queue.ts",
     "routing:autolabel": "tsx scripts/auto-label-routing-queue.ts",
     "routing:advisor-log": "tsx scripts/mine-advisor-router-log.ts",
+    "sessions:model-outcomes": "tsx scripts/mine-session-model-outcomes.ts",
     "binary:build": "npx tsx scripts/build-binary-gate-dataset.ts",
     "binary:train": "npx tsx scripts/train-binary-gate.ts",
     "binary:benchmark": "npx tsx scripts/benchmark-binary-gate.ts",

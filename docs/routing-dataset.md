@@ -87,6 +87,18 @@ npm run routing:score
 
 This ranks `data/routing/unlabeled.jsonl` by model uncertainty and writes `data/routing/active-learning-queue.jsonl` plus a report. Use this to pull the hardest examples back into gold if manual review becomes available.
 
+## Mine session model outcomes
+
+```bash
+npm run sessions:model-outcomes
+npm run sessions:model-outcomes -- --cwd-contains pi-rogue
+npm run sessions:model-outcomes -- --model-contains gpt-5.3-codex-spark
+```
+
+This is a read-only session miner for advisor-model research. It scans local Pi session JSONL files, extracts assistant model calls, stop reasons, tool-call counts, token/cost usage, nearby user intent, and context-length errors. It writes generated outputs under `data/routing/session-model-outcomes*.{json,jsonl}` for analysis only; it does not mutate session files or change routing behavior.
+
+Use this lane to evaluate when fast models such as `gpt-5.3-codex-spark` are good enough versus when larger advisor models are safer because of context pressure, length stops, or error patterns.
+
 ## Train the binary gate
 
 ```bash
