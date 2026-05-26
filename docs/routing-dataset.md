@@ -67,7 +67,7 @@ Better first training set:
 npm run routing:advisor-log
 ```
 
-This reads `~/.pi/agent/fiale-plus/advisor/evals/advisor-router.jsonl` and writes advisor-specific examples. These labels are **not** the same taxonomy as task-intent labels; use them for advisor phase/decision training and diagnostics only.
+By default this scans all local advisor router logs matching `~/.pi/agent/*/advisor/evals/advisor-router.jsonl` and writes advisor-specific examples. Pass `-- --input <file>` (or comma-separated files) to narrow the source. These labels are **not** the same taxonomy as task-intent labels; use them for advisor phase/decision training and diagnostics only.
 
 Current finding: failed-turn closeout rows like `Turn reported failure.` are diagnostic examples, not task-intent training examples.
 
