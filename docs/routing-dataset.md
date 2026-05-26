@@ -96,6 +96,14 @@ npm run binary:train
 
 Builds the binary gate dataset from gold + Pi + Claude sessions, then trains TF-IDF + logistic regression. Model saved to `data/routing/binary-gate-model.json`.
 
+## Review exact binary conflicts
+
+```bash
+npm run binary:review-conflicts
+```
+
+Exports exact gold-vs-heuristic conflicts to ignored JSON/Markdown reports and evaluates an explicit source-priority review overlay against gold holdout. This is diagnostic only: it does not mutate gold labels, generated datasets, shipped model assets, or runtime routing.
+
 ## Benchmark
 
 ```bash
