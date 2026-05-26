@@ -96,6 +96,14 @@ npm run binary:train
 
 Builds the binary gate dataset from gold + Pi + Claude sessions, then trains TF-IDF + logistic regression. Model saved to `data/routing/binary-gate-model.json`.
 
+## Evaluate candidate training matrix
+
+```bash
+npm run binary:eval-candidates
+```
+
+This is an eval-only candidate matrix for advisor binary-gate training. It compares non-gold baseline, curated-gold calibration, and source-priority conflict weighting on held-out gold, held-out conflict rows, and random session-derived rows. Generated reports stay ignored under `data/routing/`; no shipped model or runtime routing is changed.
+
 ## Benchmark
 
 ```bash
