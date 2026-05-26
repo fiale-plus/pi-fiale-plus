@@ -20,6 +20,7 @@
     "binary:eval-sources": "npx tsx scripts/eval-binary-gate-sources.ts",
     "binary:review-conflicts": "npx tsx scripts/review-binary-gate-conflicts.ts",
     "binary:eval-candidates": "npx tsx scripts/eval-binary-gate-candidate-matrix.ts",
+    "binary:eval-q1-q10": "npx tsx scripts/eval-binary-gate-q1-q10-augmentation.ts",
     "binary:benchmark": "npx tsx scripts/benchmark-binary-gate.ts",
     "routing:score": "tsx scripts/score-routing-active-learning.ts",
     "routing:eval": "tsx scripts/eval-routing-baselines.ts"

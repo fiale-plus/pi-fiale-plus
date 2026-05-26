@@ -132,6 +132,14 @@ npm run binary:eval-candidates
 
 This is an eval-only candidate matrix for advisor binary-gate training. It compares non-gold baseline, curated-gold calibration, and source-priority conflict weighting on held-out gold, held-out conflict rows, and random session-derived rows. Generated reports stay ignored under `data/routing/`; no shipped model or runtime routing is changed.
 
+## Evaluate Q1-Q10 conflict augmentation
+
+```bash
+npm run binary:eval-q1-q10
+```
+
+This converts the Q1-Q10 conflict-labeling interview into resolved conflict examples with rule provenance, then evaluates whether adding those examples helps the binary model. The rules are used as labeling metadata only; this is not a runtime policy overlay and does not replace shipped advisor assets.
+
 ## Benchmark
 
 ```bash
