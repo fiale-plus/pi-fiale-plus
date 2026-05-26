@@ -96,6 +96,8 @@ npm run binary:train
 
 Builds the binary gate dataset from gold + Pi + Claude sessions, then trains TF-IDF + logistic regression. Model saved to `data/routing/binary-gate-model.json`.
 
+The binary builder is conservative by default and keeps all rows. For repeatable conflict-ablation experiments, pass `-- --conflict-policy drop-exact` to remove exact prompts where curated gold and heuristic Pi labels map to opposite binary decisions. The default remains `keep`; this option is for candidate evaluation only unless a later training PR explicitly promotes it.
+
 ## Benchmark
 
 ```bash
