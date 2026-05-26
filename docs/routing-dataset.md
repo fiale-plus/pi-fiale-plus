@@ -140,6 +140,14 @@ npm run binary:eval-q1-q10
 
 This converts the Q1-Q10 conflict-labeling interview into resolved conflict examples with rule provenance, then evaluates whether adding those examples helps the binary model. The rules are used as labeling metadata only; this is not a runtime policy overlay and does not replace shipped advisor assets.
 
+## Build Q1-Q10 conflict-like review queue
+
+```bash
+npm run binary:q1-q10-queue
+```
+
+This scans unlabeled and weakly labeled routing rows for Q1-Q10-like boundary cases and writes an ignored JSONL/Markdown review queue. Use it to add reviewed conflict-like examples so future binary-gate candidates can learn the policy from data rather than runtime rules.
+
 ## Benchmark
 
 ```bash
