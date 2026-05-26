@@ -177,6 +177,34 @@ function main() {
   }
   console.log(`claude project sessions mined: ${claudeProjectCount}`);
 
+  // 5. Mine real advisor router logs (high-signal from live gate decisions on actual advisor LLM sessions)
+  // These come from real usage of the current binary gate + full advisor (including spark-class local high-quality runs).
+  // Explicit preflight:escalate_to_advisor (323 in recent mining) + review:abstain/on_track etc. provide
+  // the missing hard-negative volume and boundary cases for q1-q10 / over-escalation work.
+  let advisorRouterCount = 0;
+  const advisorRouterInput = path.join(process.cwd(), "data", "routing", "advisor-router-examples.jsonl");
+  if (fs.existsSync(advisorRouterInput)) {
+    const raw = fs.readFileSync(advisorRouterInput, "utf8");
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const row = JSON.parse(trimmed);
+        if (!row.trainable) continue;
+        const text = row.text || row.prompt;
+        if (!text || text.length < 4) continue;
+        // Map live gate outcomes: explicit escalate_to_advisor or escalate:true → escalate;
+        // review/closeout/abstain + preflight:continue/low_confidence → continue (hard negatives / cheap signals)
+        const isEscalate = row.target === "preflight:escalate_to_advisor" || row.escalate === true;
+        const bin: "escalate" | "continue" = isEscalate ? "escalate" : "continue";
+        add(text, bin, "advisor_router_log");
+        advisorRouterCount++;
+      } catch {}
+      if (rows.length >= args.limit) break;
+    }
+  }
+  console.log(`advisor router logs mined: ${advisorRouterCount}`);
+
   // Output
   const binCounts = rows.reduce<Record<string, number>>((a, r) => { a[r.label] = (a[r.label] || 0) + 1; return a; }, {});
   const sourceCounts = rows.reduce<Record<string, number>>((a, r) => { a[r.source] = (a[r.source] || 0) + 1; return a; }, {});
