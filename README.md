@@ -8,41 +8,44 @@ PiRogue is a modular Pi extension stack for **agentic session guidance** and **g
 
 ## Components and release status
 
-The released surface is currently two published packages. The umbrella bundle exists as an internal workspace only and is intentionally marked as the PiRogue greenhouse.
-
 | Surface | Package | NPM Version | NPM Downloads | What it is |
 |---|---|---|---|---|
-| Advisor | `@fiale-plus/pi-rogue-advisor` | [![advisor version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | [![advisor downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | Strategic advisor + phase-aware routing + low-cost check-ins |
-| Orchestrator | `@fiale-plus/pi-rogue-orchestration` | [![orchestration version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | [![orchestration downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | Loop, goal, and autoresearch controls for session workflows |
-| Greenhouse (internal) | `packages/bundle` (`@fiale-plus/pi-rogue`, private workspace) | n/a | n/a | Internal umbrella aggregator for local checkout only |
+| Published | `@fiale-plus/pi-rogue-advisor` | [![advisor version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | [![advisor downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | Strategic advisor + phase-aware routing + optional check-ins |
+| Published | `@fiale-plus/pi-rogue-orchestration` | [![orchestration version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | [![orchestration downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | Loop, goal, and autoresearch controls |
+| Upcoming (prepared) | `@fiale-plus/pi-rogue-bundle` | [![bundle version](https://img.shields.io/badge/bundle%20version-n%2Fa-lightgrey?style=flat-square)](https://img.shields.io/badge/bundle%20version-n%2Fa-lightgrey) | [![bundle downloads](https://img.shields.io/badge/bundle%20downloads-n%2Fa-lightgrey?style=flat-square)](https://img.shields.io/badge/bundle%20downloads-n%2Fa-lightgrey) | Umbrella package for advisor + orchestration |
+
+Lab/greenhouse helper packages are currently internal and not listed as published surfaces.
+
 
 ## Install
 
 ### Published packages (recommended)
 
 ```bash
-# from Pi
+# individual surfaces
 pi install npm:@fiale-plus/pi-rogue-advisor
 pi install npm:@fiale-plus/pi-rogue-orchestration
-
-# or plain npm
-npm install @fiale-plus/pi-rogue-advisor @fiale-plus/pi-rogue-orchestration
 ```
 
-### Local workspace / greenhouse bundle
+### Umbrella package
+
+`@fiale-plus/pi-rogue-bundle` is prepared as the umbrella package. It is currently available via the workspace package (`npm install` at repo root) and will be published as a dedicated release step.
+
+### Local workspace / lab
 
 ```bash
 # from repo root
 npm install
 ```
 
-Then the local workspace exposes all packages in this repo (`advisor`, `orchestration`, `bundle`, and internal packages).
+This exposes all workspace packages (`advisor`, `orchestration`, `bundle`, and internal lab packages) for local development.
 
 ## Quick start
 
-1. Install one or both published packages.
+1. Install either the umbrella or individual packages.
 2. Start a Pi session.
-3. Use:
+3. Run `/advisor` (or `/advisor status`) first to let the quick main model establish session posture.
+4. Then use:
    - `/pi-rogue` — cockpit and command pointers
    - `/advisor` — strategic guidance
    - `/goal`, `/loop`, `/autoresearch`, `/autoresearch-lab` — orchestration primitives
@@ -69,14 +72,18 @@ Then the local workspace exposes all packages in this repo (`advisor`, `orchestr
 - `/autoresearch status|clear|<instruction>`
 - `/autoresearch-lab status|clear|<instruction>`
 
+### Bundle package
+
+- Includes both advisor and orchestration commands above via one install.
+
 ## Documentation
 
 - `packages/advisor/README.md` (Advisor package)
 - `packages/orchestration/README.md` (Orchestration package)
-- `packages/bundle/README.md` (Greenhouse/bundle context)
+- `packages/bundle/README.md` (Bundle surface)
 - `packages/advisor/skills/advisor/SKILL.md` (Pi skill surface)
 - `packages/orchestration/skills/orchestration/SKILL.md` (Pi skill surface)
-- `docs/agents.md` (agentic usage playbook)
+- `AGENTS.md` (agentic usage/playbook + repo-level agent instructions)
 - `docs/skills-flow.md` (how advisor/orchestration skills fit together)
 - `docs/release.md` and `.github/ISSUE_TEMPLATE/release.md` (release policy and naming)
 
@@ -87,12 +94,6 @@ npm install
 npm run check
 npm test
 ```
-
-## Related files
-
-- `LICENSE`
-- `docs/*` for process, release, routing, and agent usage
-- `packages/*` for source
 
 ## Repo layout
 
@@ -108,4 +109,3 @@ packages/
 ```
 
 Legacy `.autoresearch` scratch data is archived at `~/.pi/archived-autoresearch/pi-rogue/`.
-
