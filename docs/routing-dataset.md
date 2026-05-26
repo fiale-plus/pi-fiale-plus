@@ -177,6 +177,17 @@ Use filters to focus a lane, for example current over-escalation misses:
 npm run binary:q1-q10-hard-negatives -- --direction continue->escalate --output data/routing/binary-q1-q10-over-escalation-packet.jsonl --markdown data/routing/binary-q1-q10-over-escalation-packet.md --report data/routing/binary-q1-q10-over-escalation-packet-report.json
 ```
 
+## Build Q1-Q10 over-escalation augmentation
+
+```bash
+npm run binary:q1-q10-over-escalation
+npm run binary:eval-q1-q10 -- \
+  --reviewed /tmp/q1-q10-reviewed-all.jsonl,data/routing/binary-q1-q10-over-escalation-augmentation.jsonl \
+  --conflict-overrides data/routing/binary-q1-q10-hard-negative-label-overrides.jsonl
+```
+
+This creates contrastive rows from current `continue -> predicted escalate` conflict misses. It is an isolated research lane for training-data experiments and does not change runtime routing behavior.
+
 ## Benchmark
 
 ```bash
