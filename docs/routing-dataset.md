@@ -96,6 +96,14 @@ npm run binary:train
 
 Builds the binary gate dataset from gold + Pi + Claude sessions, then trains TF-IDF + logistic regression. Model saved to `data/routing/binary-gate-model.json`.
 
+## Evaluate source holdout
+
+```bash
+npm run binary:eval-sources
+```
+
+This trains the binary gate on all but one data source and tests on the held-out source. Use this before replacing the shipped gate: random splits can look strong while source splits reveal overfitting to `gold`, `pi_session`, or `claude_history` wording.
+
 ## Benchmark
 
 ```bash
