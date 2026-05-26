@@ -96,6 +96,14 @@ npm run binary:train
 
 Builds the binary gate dataset from gold + Pi + Claude sessions, then trains TF-IDF + logistic regression. Model saved to `data/routing/binary-gate-model.json`.
 
+## Evaluate gold calibration
+
+```bash
+npm run binary:eval-gold
+```
+
+This trains on all non-gold rows plus an increasing fraction of curated `gold` rows, then tests on the remaining held-out gold rows. Use it to answer whether a small gold calibration set fixes weak gold holdout before replacing the shipped gate.
+
 ## Benchmark
 
 ```bash
