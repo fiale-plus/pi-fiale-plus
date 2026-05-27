@@ -3,7 +3,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const MODEL_PATH = join(homedir(), ".pi", "agent", "fiale-plus", "advisor", "binary-gate-model.json");
+const DEFAULT_MODEL_PATH = join(homedir(), ".pi", "agent", "fiale-plus", "advisor", "binary-gate-model.json");
+const MODEL_PATH = process.env.BINARY_GATE_MODEL_PATH || DEFAULT_MODEL_PATH;
 
 interface ModelArtifact {
   kind: string;

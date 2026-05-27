@@ -6,6 +6,28 @@ const DEFAULT_INPUT = path.join(process.cwd(), "data", "routing", "binary-gate.j
 const DEFAULT_MODEL = path.join(process.cwd(), "data", "routing", "binary-gate-model.json");
 const DEFAULT_REPORT = path.join(process.cwd(), "data", "routing", "binary-training-report.json");
 
+function parseArgs(argv: string[]) {
+  const args: Record<string, string | boolean> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) continue;
+    const key = a.slice(2);
+    const next = argv[i + 1];
+    if (next && !next.startsWith("--")) {
+      args[key] = next;
+      i++;
+    } else {
+      args[key] = true;
+    }
+  }
+
+  return {
+    input: String(args.input || DEFAULT_INPUT),
+    model: String(args.model || DEFAULT_MODEL),
+    report: String(args.report || DEFAULT_REPORT),
+  };
+}
+
 interface BinaryRow { id: string; text: string; label: "escalate" | "continue"; source: string; sourceLabel?: string; cwd?: string; }
 interface Example { text: string; label: string; weight?: number; }
 interface ModelArtifact { kind: "binary-logreg-v1"; labels: string[]; features: string[]; idf: number[]; bias: number[]; weights: number[][]; config: Record<string, unknown>; }
@@ -90,7 +112,8 @@ function predict(vec: { I: number[]; V: number[] }, w: number[][], b: number[]):
 function predictProbs(vec: { I: number[]; V: number[] }, w: number[][], b: number[]): number[] { const s = b.slice(); for (let c = 0; c < w.length; c++) { let v = s[c]; const wt = w[c]; for (let i = 0; i < vec.I.length; i++) v += wt[vec.I[i]] * vec.V[i]; s[c] = v; } return softmax(s); }
 
 function main() {
-  const rows = fs.readFileSync(DEFAULT_INPUT, "utf8").split(/\n+/).filter(Boolean).map(l => JSON.parse(l) as BinaryRow);
+  const args = parseArgs(process.argv.slice(2));
+  const rows = fs.readFileSync(args.input, "utf8").split(/\n+/).filter(Boolean).map((l) => JSON.parse(l) as BinaryRow);
   const examples = rows.map(r => ({ text: r.text, label: r.label }));
   const { train, test } = stratifiedSplit(examples, 0.8, 42);
   const { features, index, idf, vectors: trainVecs } = buildFeatureSpace(train, 6000, 2);
@@ -154,7 +177,7 @@ function main() {
 
   const model: ModelArtifact = { kind: "binary-logreg-v1", labels, features, idf, bias: bb, weights: bw, config: { epochs, learningRate: lr, l2 } };
   const report = {
-    input: DEFAULT_INPUT, rows: rows.length, train: train.length, test: test.length,
+    input: args.input, rows: rows.length, train: train.length, test: test.length,
     binaryCounts: rows.reduce((a: Record<string, number>, r: BinaryRow) => { a[r.label] = (a[r.label] || 0) + 1; return a; }, {}),
     sourceCounts: rows.reduce((a: Record<string, number>, r: BinaryRow) => { a[r.source] = (a[r.source] || 0) + 1; return a; }, {}),
     majority: { label: "escalate", accuracy: testY.filter(y => y === 1).length / testY.length, correct: testY.filter(y => y === 1).length, total: testY.length },
@@ -169,9 +192,9 @@ function main() {
     },
   };
 
-  fs.mkdirSync(path.dirname(DEFAULT_MODEL), { recursive: true });
-  fs.writeFileSync(DEFAULT_MODEL, JSON.stringify(model, null, 2) + "\n", "utf8");
-  fs.writeFileSync(DEFAULT_REPORT, JSON.stringify(report, null, 2) + "\n", "utf8");
+  fs.mkdirSync(path.dirname(args.model), { recursive: true });
+  fs.writeFileSync(args.model, JSON.stringify(model, null, 2) + "\n", "utf8");
+  fs.writeFileSync(args.report, JSON.stringify(report, null, 2) + "\n", "utf8");
 
   console.log(`rows: ${rows.length}`);
   console.log(`train/test: ${train.length}/${test.length}`);
@@ -185,8 +208,8 @@ function main() {
   console.log(`continue recall: ${(cpRec * 100).toFixed(1)}%`);
   console.log(`continue F1: ${(cpF1).toFixed(3)}`);
   console.log(`best epoch: ${be}`);
-  console.log(`model: ${DEFAULT_MODEL}`);
-  console.log(`report: ${DEFAULT_REPORT}`);
+  console.log(`model: ${args.model}`);
+  console.log(`report: ${args.report}`);
 }
 
 try { main(); } catch (e) { console.error(e instanceof Error ? e.stack || e.message : String(e)); process.exitCode = 1; }
