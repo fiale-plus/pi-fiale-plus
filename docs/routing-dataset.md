@@ -138,6 +138,69 @@ This is an eval-only candidate matrix for advisor binary-gate training. It compa
 npm run binary:benchmark
 ```
 
+### Terminal-Bench 2.1/2.0 core slice workflow (reproducible)
+
+For an external, task-style stress set:
+
+1. Install Harbor CLI (temporary, from pip install path):
+
+```bash
+uv tool install terminal-bench
+```
+
+2. Download a pinned dataset version (no runtime execution required for data-only lane):
+
+```bash
+tb datasets download --dataset terminal-bench-core==0.1.1 --output-dir /tmp/terminal-bench-core-0.1.1
+```
+
+3. Build a labeled benchmark slice from task metadata (easy=>continue, non-easy=>escalate):
+
+```bash
+python3 - <<'PY'
+import pathlib, re, json, random, hashlib
+random.seed(42)
+rows=[]
+for p in pathlib.Path('/tmp/terminal-bench-core-0.1.1').rglob('task.yaml'):
+    t=p.read_text()
+    m_dif=re.search(r'^difficulty:\s*(\S+)', t, re.M)
+    d=(m_dif.group(1) if m_dif else 'medium').strip().lower()
+    m_inst=re.search(r'^instruction:\s*\|-\n([\s\S]*?)\n\S', t, re.M)
+    instr=(m_inst.group(1) if m_inst else '').replace('\n  ','\n').strip()
+    if not instr:
+        text=f"Terminal-Bench task: {p.parent.name}."
+    else:
+        text=f"Terminal-Bench task: {p.parent.name}. {instr[:900]}"
+    n=' '.join(text.lower().split())
+    rows.append({'id': hashlib.md5(n.encode()).hexdigest()[:16], 'text': text, 'label': 'continue' if d=='easy' else 'escalate', 'source':'terminal-bench-core-0.1.1', 'sourceLabel': d})
+
+easy=[r for r in rows if r['label']=='continue']
+hard=[r for r in rows if r['label']=='escalate']
+sel=random.sample(easy, min(12,len(easy))) + random.sample(hard, min(20,len(hard)))
+out=pathlib.Path('data/routing/binary-gate-bench-terminal-core-small.jsonl')
+out.write_text('\n'.join(json.dumps(r) for r in sel)+'\n')
+print('rows',len(sel),'easy',len([r for r in sel if r['label']=='continue']),'escalate',len([r for r in sel if r['label']=='escalate']))
+PY
+```
+
+4. Evaluate candidate vs shipped model on that slice:
+
+```bash
+npm run binary:eval-file -- --input data/routing/binary-gate-bench-terminal-core-small.jsonl --model data/routing/binary-gate-bench-terminal-core-model.json
+```
+
+```bash
+npm run binary:eval-file -- --input data/routing/binary-gate-bench-terminal-core-small.jsonl
+```
+
+### Execute official Terminal-Bench run (when Docker is available)
+
+```bash
+tb run --agent oracle --dataset terminal-bench-core==0.1.1 --n-tasks 1 --output-path /tmp/tb_run_oracle --no-upload-results
+```
+
+This environment currently fails in this workspace because Docker daemon is unavailable.
+
 ## Training gate
 
 Train only after gold data exists. Evaluate on held-out labels with macro-F1 and per-class recall.
