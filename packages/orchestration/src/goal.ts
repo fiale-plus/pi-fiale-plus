@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendText, contentText, featureFile, readText, sessionFile, truncate, writeText } from "./internal.js";
 import { shouldHoldResearchOpen, type ResearchCheckResult } from "./autoresearch-completion.js";
-import { clearResearchState, clearResearchStateForGoal, readResearchState, writeResearchState, type ResearchState } from "./autoresearch-state.js";
+import { clearResearchState, clearResearchStateForGoal, hasActiveResearch, readResearchState, writeResearchState, type ResearchState } from "./autoresearch-state.js";
+import { setAdvisorCheckinsEnabled } from "./advisor-checkins.js";
 import { endGoalCheck, goalCheckResult, hasGoalCheckPending } from "./goal-resolution.js";
 import { clearLoop, triggerLoopTick } from "./loop.js";
 import { goalArgumentCompletions } from "./completions.js";
@@ -22,6 +23,7 @@ export function activeGoal(ctx: any): string {
 export function setGoal(ctx: any, goal: string): void {
   const note = goal.trim();
   writeText(sessionFile(FEATURE, ctx, CURRENT_FILE), `${note}\n`);
+  setAdvisorCheckinsEnabled(true);
   endGoalCheck(ctx);
   appendText(HISTORY_FILE, `${JSON.stringify({ at: new Date().toISOString(), goal: note })}\n`);
 }
@@ -87,7 +89,11 @@ export function recordResearchCheck(ctx: any, state: ResearchState, result: Rese
 export function registerGoal(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     endGoalCheck(ctx);
-    setGoalStatus(ctx, activeGoal(ctx) || null);
+    const goal = activeGoal(ctx);
+    setGoalStatus(ctx, goal || null);
+    if (!goal && !hasActiveResearch(ctx)) {
+      setAdvisorCheckinsEnabled(false);
+    }
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
@@ -122,6 +128,7 @@ export function registerGoal(pi: ExtensionAPI): void {
       clearResearchState(ctx);
       clearLoop(ctx);
     }
+    setAdvisorCheckinsEnabled(hasActiveResearch(ctx));
     ctx.ui.notify(`🎯 Goal completed: ${truncate(goal, 160)}`, "info");
   });
 
@@ -161,6 +168,7 @@ export function registerGoal(pi: ExtensionAPI): void {
         if (clearedResearch) {
           clearLoop(ctx);
         }
+        setAdvisorCheckinsEnabled(hasActiveResearch(ctx));
         ctx.ui.notify(goal ? `Goal cleared${clearedResearch ? "; matching autoresearch status cleared" : ""}.` : "No goal to clear.", "info");
         return;
       }

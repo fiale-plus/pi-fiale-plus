@@ -37,11 +37,11 @@ npm install --workspace packages/advisor
 
 - `mode`: `auto`
 - `review`: `light`
-- `checkins`: `mid-hour`
+- `checkins`: `off` (orchestration turns them on while a goal/autoresearch flow is active)
 - `checkinIntervalMinutes`: `30`
 - `model`: not set (auto-detected)
 
-Check-ins gate on session activity, are bounded, and avoid overlapping calls.
+Check-ins gate on session activity, are bounded, and avoid overlapping calls. They can still be controlled explicitly with `/advisor checkins on|off|<minutes>`.
 
 ## Stability guarantees
 

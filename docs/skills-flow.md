@@ -11,7 +11,7 @@ This repo keeps the existing skill logic intact and routes it into the orchestra
 ## Orchestration core
 
 - `loop` → primitive tick/heartbeat layer
-- `goal` → session objective, retargeting, side-quest recovery, completion
+- `goal` → session objective, retargeting, side-quest recovery, completion; owns advisor check-in lifecycle while active
 
 ## Research
 
@@ -20,7 +20,7 @@ This repo keeps the existing skill logic intact and routes it into the orchestra
 - Source skill: iterative optimization with measurement, implementation, checks, and stall detection
 - In flow: `packages/orchestration` command `/autoresearch`
 - Role: single-agent optimization over a measurable target
-- Runtime: facade over `/goal` + `/loop`; starting autoresearch writes a research-shaped goal, starts a 5m loop, queues the first cycle immediately, guards against premature completion without multiple/evidence-backed cycles, exposes cycle/done-attempt counters in status, and clears stale status when the backing goal or loop is cleared
+- Runtime: facade over `/goal` + `/loop`; starting autoresearch writes a research-shaped goal, starts a 5m loop, enables advisor check-ins while active, queues the first cycle immediately, guards against premature completion without multiple/evidence-backed cycles, exposes cycle/done-attempt counters in status, and clears stale status/check-ins when the backing goal or loop is cleared
 - Preserved goodness:
   - metric-first workflow
   - measurement + checks

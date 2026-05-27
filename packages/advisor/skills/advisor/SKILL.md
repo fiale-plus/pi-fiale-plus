@@ -43,6 +43,6 @@ The advisor surface is separate from orchestration (`goal`/`loop`/`autoresearch`
 
 - `mode: auto`
 - `review: light`
-- `checkins: mid-hour`
+- `checkins: off` by default; orchestration enables them while a goal/autoresearch flow is active
 - `checkinIntervalMinutes: 30`
 - `model: auto`

@@ -38,7 +38,7 @@ export interface AdvisorConfig {
 const DEFAULT_CONFIG: AdvisorConfig = {
   mode: "auto",
   review: "light",
-  checkins: "mid-hour",
+  checkins: "off",
   checkinIntervalMinutes: 30,
 };
 
@@ -121,7 +121,7 @@ export function normalizeAdvisorConfig(raw: Partial<AdvisorConfig> = {}): Adviso
   return {
     mode: (raw.mode === "manual" || raw.mode === "off") ? raw.mode : "auto",
     review: (raw.review === "strict" || raw.review === "off") ? raw.review : "light",
-    checkins: raw.checkins === "off" ? "off" : "mid-hour",
+    checkins: raw.checkins === "mid-hour" ? "mid-hour" : DEFAULT_CONFIG.checkins,
     checkinIntervalMinutes: Math.min(MAX_CHECKIN_INTERVAL_MINUTES, Math.max(MIN_CHECKIN_INTERVAL_MINUTES, Number.isFinite(interval) ? Math.round(interval) : DEFAULT_CONFIG.checkinIntervalMinutes)),
     model: raw.model || undefined,
   };
