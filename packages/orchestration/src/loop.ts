@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { clearResearchState, hasActiveResearch } from "./autoresearch-state.js";
+import { setAdvisorCheckinsEnabled } from "./advisor-checkins.js";
 import { buildGoalCheckPrompt, beginGoalCheck, hasGoalCheckPending } from "./goal-resolution.js";
 import { readText, sessionFile, sessionKey, truncate } from "./internal.js";
 import { readSessionJson, writeSessionJson } from "./state.js";
@@ -51,6 +52,7 @@ export function clearLoop(ctx: any, options: { clearResearch?: boolean } = {}): 
   setLoopStatus(ctx, next);
   if (options.clearResearch) {
     clearResearchState(ctx);
+    setAdvisorCheckinsEnabled(Boolean(activeGoal(ctx)));
   }
   return next;
 }

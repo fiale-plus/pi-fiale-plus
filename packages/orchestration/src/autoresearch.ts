@@ -10,6 +10,7 @@ import {
   writeResearchState,
   type ResearchKind,
 } from "./autoresearch-state.js";
+import { setAdvisorCheckinsEnabled } from "./advisor-checkins.js";
 import { autoresearchArgumentCompletions } from "./completions.js";
 
 function buildResearchGoal(kind: ResearchKind, instruction: string): string {
@@ -78,6 +79,7 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
           clearGoal(ctx);
           setGoalStatus(ctx, null);
         }
+        setAdvisorCheckinsEnabled(Boolean(activeGoal(ctx)));
         ctx.ui.notify(`${prefix} cleared; underlying loop stopped${clearedGoal ? " and matching goal cleared" : ""}.`, "info");
         return;
       }
@@ -108,6 +110,7 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
         doneAttempts: 0,
         updatedAt: "",
       });
+      setAdvisorCheckinsEnabled(true);
       ctx.ui.notify(`${formatResearchState(next)}. First cycle queued now.`, "info");
     },
   });

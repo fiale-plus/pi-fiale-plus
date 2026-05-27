@@ -18,11 +18,11 @@ function state(overrides: Record<string, unknown> = {}) {
 }
 
 describe("AdvisorConfig", () => {
-  it("defaults to auto mode, light review, and mid-hour check-ins", () => {
+  it("defaults to auto mode, light review, and goal-scoped check-ins off", () => {
     const cfg = normalizeAdvisorConfig({});
     expect(cfg.mode).toBe("auto");
     expect(cfg.review).toBe("light");
-    expect(cfg.checkins).toBe("mid-hour");
+    expect(cfg.checkins).toBe("off");
     expect(cfg.checkinIntervalMinutes).toBe(30);
     expect(cfg.model).toBeUndefined();
   });
@@ -57,7 +57,7 @@ describe("AdvisorConfig", () => {
     const parsed = normalizeAdvisorConfig(JSON.parse(json) as AdvisorConfig);
     expect(parsed.mode).toBe("auto");
     expect(parsed.review).toBe("light");
-    expect(parsed.checkins).toBe("mid-hour");
+    expect(parsed.checkins).toBe("off");
     expect(parsed.checkinIntervalMinutes).toBe(30);
     expect(parsed.model).toBe("claude-opus-4-6");
   });
@@ -65,21 +65,21 @@ describe("AdvisorConfig", () => {
 
 describe("mid-hour check-ins", () => {
   it("does not run immediately after session start", () => {
-    const cfg = normalizeAdvisorConfig({ checkinIntervalMinutes: 30 });
+    const cfg = normalizeAdvisorConfig({ checkins: "mid-hour", checkinIntervalMinutes: 30 });
     const startedAt = 1_000;
     const now = startedAt + 5 * 60_000;
     expect(shouldRunCheckin(cfg, state(), now, startedAt)).toBeNull();
   });
 
   it("runs after interval when there was new activity", () => {
-    const cfg = normalizeAdvisorConfig({ checkinIntervalMinutes: 30 });
+    const cfg = normalizeAdvisorConfig({ checkins: "mid-hour", checkinIntervalMinutes: 30 });
     const startedAt = 1_000;
     const now = startedAt + 31 * 60_000;
     expect(shouldRunCheckin(cfg, state(), now, startedAt)).toMatch(/mid-hour check-in/);
   });
 
   it("does not run without activity since the last check-in", () => {
-    const cfg = normalizeAdvisorConfig({ checkinIntervalMinutes: 30 });
+    const cfg = normalizeAdvisorConfig({ checkins: "mid-hour", checkinIntervalMinutes: 30 });
     const lastAt = new Date(1_000).toISOString();
     const now = 1_000 + 60 * 60_000;
     expect(shouldRunCheckin(cfg, state({ turns: 5, checkin: { lastAt, lastTurn: 5 } }), now, 1_000)).toBeNull();
