@@ -32,7 +32,7 @@ Use this skill for non-trivial decisions before/after significant edits.
 
 - Preflight is heuristics + quick local gate first.
 - Review runs after edits and/or at completion points by policy.
-- No standalone check-in command: scheduled check-ins are activated by loop lifecycle, using higher/advanced advisor models first with regular model fallback enabled by default.
+- No standalone check-in command: check-ins are triggered from loop cadence (not from advisor internals), using higher/advanced advisor models first with regular model fallback enabled by default.
 
 ## Keep scope clear
 
@@ -42,6 +42,6 @@ The advisor surface is separate from orchestration (`goal`/`loop`/`autoresearch`
 
 - `mode: auto`
 - `review: light`
-- `checkins: off` by default; orchestration enables them when a loop is active
+- `checkins: off` by default; loop orchestration owns cadence and enables them when active
 - `checkinIntervalMinutes: 30`
 - `model: auto`
