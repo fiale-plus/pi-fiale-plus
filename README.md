@@ -10,7 +10,7 @@ Pi-Rogue is a modular Pi extension stack for **agentic session guidance** and **
 
 | Package | NPM Version | NPM Downloads | What it is |
 |---|---|---|---|
-| `@fiale-plus/pi-rogue-advisor` | [![advisor version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | [![advisor downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | Strategic advisor + phase-aware routing + optional check-ins |
+| `@fiale-plus/pi-rogue-advisor` | [![advisor version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | [![advisor downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-advisor?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-advisor) | Strategic advisor + phase-aware routing + orchestration-managed check-ins |
 | `@fiale-plus/pi-rogue-orchestration` | [![orchestration version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | [![orchestration downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-orchestration?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-orchestration) | Loop, goal, and autoresearch controls |
 | `@fiale-plus/pi-rogue-bundle` | [![bundle version](https://img.shields.io/npm/v/%40fiale-plus%2Fpi-rogue-bundle?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-bundle) | [![bundle downloads](https://img.shields.io/npm/dm/%40fiale-plus%2Fpi-rogue-bundle?style=flat-square)](https://www.npmjs.com/package/@fiale-plus/pi-rogue-bundle) | Umbrella package for advisor + orchestration |
 
@@ -57,12 +57,11 @@ This exposes all workspace packages (`advisor`, `orchestration`, `bundle`, and i
 
 ### Advisor package
 
-- `/advisor` — status, config, mode/review/check-in/model control, and questions
-- `/advisor status` — show active mode/review/check-ins/model state
+- `/advisor` — status, config, mode/review/model control, and questions
+- `/advisor status` — show active mode/review/model state and loop-owned check-ins
 - `/advisor on|off`
 - `/advisor mode auto|manual|off`
 - `/advisor review light|strict|off`
-- `/advisor checkins on|off|<minutes>` — opportunistic check-ins during long sessions
 - `/advisor model <provider>/<model>` — optional override
 - `/advisor config`
 - `/advisor <question>` — get immediate advice
@@ -70,9 +69,9 @@ This exposes all workspace packages (`advisor`, `orchestration`, `bundle`, and i
 
 ### Orchestration package
 
-- `/goal set|show|clear|list`
+- `/goal set|show|clear|list` — set or update the active goal (check-ins are enabled when a loop is active)
 - `/loop status|off|clear|stop|<interval> <instruction>`
-- `/autoresearch status|clear|<instruction>`
+- `/autoresearch status|clear|<instruction>` — goal+loop-driven research flow; check-ins are tied to loop activation
 - `/autoresearch-lab status|clear|<instruction>`
 
 ### Bundle package

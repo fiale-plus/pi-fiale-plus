@@ -10,7 +10,7 @@ import {
   writeResearchState,
   type ResearchKind,
 } from "./autoresearch-state.js";
-import { setAdvisorCheckinsEnabled } from "./advisor-checkins.js";
+import { appendText, featureFile } from "./internal.js";
 import { autoresearchArgumentCompletions } from "./completions.js";
 
 function buildResearchGoal(kind: ResearchKind, instruction: string): string {
@@ -72,6 +72,14 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
 
       if (resolved === "clear") {
         const previous = readResearchState(ctx);
+        if (previous.instruction) {
+          appendText(featureFile("orchestration", "autoresearch-history.jsonl"), `${JSON.stringify({
+            at: new Date().toISOString(),
+            action: "clear",
+            previous,
+          })}\n`);
+        }
+
         clearResearchState(ctx);
         clearLoop(ctx);
         const clearedGoal = Boolean(previous.goal && activeGoal(ctx) === previous.goal);
@@ -79,7 +87,6 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
           clearGoal(ctx);
           setGoalStatus(ctx, null);
         }
-        setAdvisorCheckinsEnabled(Boolean(activeGoal(ctx)));
         ctx.ui.notify(`${prefix} cleared; underlying loop stopped${clearedGoal ? " and matching goal cleared" : ""}.`, "info");
         return;
       }
@@ -88,6 +95,21 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
       if (!instruction) {
         ctx.ui.notify(`Usage: /${commandName} <instruction>`, "error");
         return;
+      }
+
+      const previous = readResearchState(ctx);
+      if (previous.instruction) {
+        appendText(featureFile("orchestration", "autoresearch-history.jsonl"), `${JSON.stringify({
+          at: new Date().toISOString(),
+          action: "replace",
+          previous,
+        })}\n`);
+      }
+
+      clearResearchState(ctx);
+      clearLoop(ctx, { clearResearch: true });
+      if (activeGoal(ctx)) {
+        clearGoal(ctx);
       }
 
       const goal = buildResearchGoal(commandName, instruction);
@@ -110,7 +132,6 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
         doneAttempts: 0,
         updatedAt: "",
       });
-      setAdvisorCheckinsEnabled(true);
       ctx.ui.notify(`${formatResearchState(next)}. First cycle queued now.`, "info");
     },
   });

@@ -30,7 +30,8 @@ Use this skill to run measurable, bounded workflow loops inside a Pi session.
 - `loop` is the primitive; `goal` is the execution intent.
 - Goal completion is explicit through `GOAL_DONE` / `GOAL_CONTINUE` in loop checks.
 - `autoresearch` / `autoresearch-lab` are facades over goal+loop.
-- Goal/autoresearch activation enables advisor check-ins; clearing the active flow disables them.
+- Loop activation enables scheduled advisor check-ins; stopping the loop disables them.
+- Check-ins belong to orchestration lifecycle, not the advisor command surface, and use higher/advanced advisor models first, with regular model fallback enabled by default.
 - `autoresearch` enforces multi-cycle + evidence-aware completion.
 - Clearing goal/loop clears stale autoresearch state.
 
