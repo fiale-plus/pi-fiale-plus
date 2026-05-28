@@ -41,5 +41,6 @@ npm install --workspace packages/orchestration
 - `loop` supports minimum interval `1m`.
 - `goal` checks are done through assistant loop ticks; `GOAL_DONE` / `GOAL_CONTINUE` are preserved.
 - `autoresearch` and `autoresearch-lab` are thin facades over `/goal + /loop`.
-- Goal/autoresearch activation enables advisor check-ins; clearing the active goal/research flow disables them again.
+- Loop activation enables scheduled advisor check-ins; stopping the active loop disables them again.
+- Check-ins are part of orchestration lifecycle, not a standalone advisor command. They use higher/advanced advisor models first, with regular model fallback enabled by default.
 - Stale research state is cleared when `goal` or `loop` are cleared.

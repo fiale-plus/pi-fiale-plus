@@ -1,5 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { normalizeAdvisorConfig, shouldRunCheckin, type AdvisorConfig } from "./extension.js";
+import { describe, expect, it, vi } from "vitest";
+import { completeSimple } from "@earendil-works/pi-ai";
+import { normalizeAdvisorConfig, shouldRunCheckin, type AdvisorConfig, completeWithHigherAdvisorModel, completeWithModelFallback } from "./extension.js";
+
+vi.mock("@earendil-works/pi-ai", async () => {
+  const actual = await vi.importActual<typeof import("@earendil-works/pi-ai")>("@earendil-works/pi-ai");
+  return {
+    ...actual,
+    completeSimple: vi.fn(),
+  };
+});
 
 function state(overrides: Record<string, unknown> = {}) {
   return {
@@ -88,6 +97,80 @@ describe("mid-hour check-ins", () => {
   it("does not run when check-ins are disabled", () => {
     const cfg = normalizeAdvisorConfig({ checkins: "off" });
     expect(shouldRunCheckin(cfg, state(), 999999, 1)).toBeNull();
+  });
+
+  it("flushes queued check-in regardless of turn delta", () => {
+    const cfg = normalizeAdvisorConfig({ checkins: "mid-hour", checkinIntervalMinutes: 30 });
+    expect(
+      shouldRunCheckin(cfg, state({
+        checkin: {
+          queued: true,
+          queuedReason: "queued mid-session check-in",
+        },
+      })),
+    ).toBe("queued mid-session check-in");
+  });
+});
+
+
+describe("advisor completion fallback behavior", () => {
+  function mkCtx(allowHighTier: boolean, includeRegular = true) {
+    const high = { id: "openai-codex/gpt-5.5", provider: "openai-codex", input: ["text"] };
+    const regular = { id: "provider/text-light", provider: "provider", input: ["text"] };
+    return {
+      modelRegistry: {
+        find: (_provider: string, model: string) => {
+          if (!allowHighTier) return null;
+          if (_provider === "openai-codex" && model === "gpt-5.5") return high;
+          if (_provider === "anthropic" && model === "claude-opus-4-6") return { ...high, id: "anthropic/claude-opus-4-6" };
+          if (_provider === "anthropic" && model === "claude-sonnet-4-6") return { ...high, id: "anthropic/claude-sonnet-4-6" };
+          if (_provider === "openai-codex" && model === "gpt-5.4-mini") return { ...high, id: "openai-codex/gpt-5.4-mini" };
+          return null;
+        },
+        getAvailable: () => (includeRegular ? [regular] : []),
+        getApiKeyAndHeaders: async (_model: unknown) => ({ ok: true, apiKey: "k", headers: {} }),
+      },
+    } as any;
+  }
+
+  it("uses high/advanced models first for check-in completion", async () => {
+    const completeSimpleMock = vi.mocked(completeSimple as any);
+    completeSimpleMock.mockReset();
+    completeSimpleMock.mockResolvedValue({ content: [{ type: "text", text: "ok" }] });
+
+    const cfg = normalizeAdvisorConfig({ mode: "auto", review: "light" });
+    const result = await completeWithHigherAdvisorModel(mkCtx(true, true), cfg, "system", [{ role: "user", content: "x" }], { maxTokens: 128, reasoning: "low" as const });
+
+    expect(result).not.toBeNull();
+    expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+    expect(completeSimpleMock.mock.calls[0]?.[0]?.id).toBe("openai-codex/gpt-5.5");
+  });
+
+  it("falls back to regular models for check-in completion when high/advanced are unavailable", async () => {
+    const completeSimpleMock = vi.mocked(completeSimple as any);
+    completeSimpleMock.mockReset();
+    completeSimpleMock.mockResolvedValue({ content: [{ type: "text", text: "ok" }] });
+
+    const cfg = normalizeAdvisorConfig({ mode: "auto", review: "light" });
+    const result = await completeWithHigherAdvisorModel(mkCtx(false, true), cfg, "system", [{ role: "user", content: "x" }], { maxTokens: 128, reasoning: "low" as const });
+
+    expect(result).not.toBeNull();
+    expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+    expect(completeSimpleMock.mock.calls[0]?.[0]?.id).toBe("provider/text-light");
+  });
+
+  it("uses regular fallback for non-checkin completion", async () => {
+    const completeSimpleMock = vi.mocked(completeSimple as any);
+    completeSimpleMock.mockReset();
+    completeSimpleMock.mockResolvedValue({ content: [{ type: "text", text: "ok" }] });
+
+    const cfg = normalizeAdvisorConfig({ mode: "auto", review: "light" });
+    const result = await completeWithModelFallback(mkCtx(false), cfg, "system", [{ role: "user", content: "x" }], { maxTokens: 128, reasoning: "low" as const });
+
+    expect(result).not.toBeNull();
+    expect(result?.fallback).toBe(true);
+    expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+    expect(completeSimpleMock.mock.calls[0]?.[0]?.id).toBe("provider/text-light");
   });
 });
 

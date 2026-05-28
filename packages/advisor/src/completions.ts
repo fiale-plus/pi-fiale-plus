@@ -40,24 +40,19 @@ const advisorTopLevel: Array<[string, string?]> = [
   ["off", "disable advisor"],
   ["mode", "set auto/manual/off"],
   ["review", "set light/strict/off"],
-  ["checkins", "configure mid-hour check-ins"],
-  ["checkin", "alias for checkins"],
   ["model", "set or inspect model override"],
 ];
 
 const advisorNested: Record<string, Array<[string, string?]>> = {
   mode: [["auto"], ["manual"], ["off"]],
   review: [["light"], ["strict"], ["off"]],
-  checkins: [["on"], ["off"], ["10"], ["15"], ["30"], ["60"]],
-  checkin: [["on"], ["off"], ["10"], ["15"], ["30"], ["60"]],
   model: [["auto"], ["openai-codex/gpt-5.5"], ["anthropic/claude-opus-4-6"]],
 };
 
 const piRogueTopLevel: Array<[string, string?]> = [
   ["status", "show cockpit"],
-  ["advisor", "advisor status and check-ins"],
+  ["advisor", "advisor status"],
   ["orchestration", "goal/loop/autoresearch shortcuts"],
-  ["checkins", "advisor check-ins"],
   ["help", "show cockpit help"],
 ];
 
@@ -70,8 +65,7 @@ const piRogueNested: Record<string, Array<[string, string?]>> = {
     ["autoresearch-lab", "parallel research flow"],
     ["status", "show all surfaces"],
   ],
-  checkins: advisorNested.checkins,
-  help: [["advisor"], ["orchestration"], ["checkins"], ["status"]],
+  help: [["advisor"], ["orchestration"], ["status"]],
 };
 
 export function advisorArgumentCompletions(prefix: string): CompletionItem[] | null {

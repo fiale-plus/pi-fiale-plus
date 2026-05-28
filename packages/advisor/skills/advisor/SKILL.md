@@ -12,7 +12,7 @@ Use this skill for non-trivial decisions before/after significant edits.
 - `/pi-rogue` — open cockpit and command pointers
 - `/advisor status` — show current advisor settings and model route
 - `/advisor <question>` — ask immediate advice
-- `/advisor checkins on|off|<minutes>` — control low-power check-ins
+- Check-ins are lifecycle-managed by `/loop`, not by the advisor command surface
 
 ## Command surface
 
@@ -24,7 +24,6 @@ Use this skill for non-trivial decisions before/after significant edits.
 | `/advisor off` | Disable advisor |
 | `/advisor mode auto\|manual\|off` | Control when advisor auto-runs |
 | `/advisor review light\|strict\|off` | Set review threshold |
-| `/advisor checkins on\|off\|<minutes>` | Configure interval check-ins |
 | `/advisor config` | Dump full config |
 | `/advisor model <provider/model>` | Pin model explicitly |
 | `/advisor <question>` | Run one advisory response |
@@ -33,7 +32,7 @@ Use this skill for non-trivial decisions before/after significant edits.
 
 - Preflight is heuristics + quick local gate first.
 - Review runs after edits and/or at completion points by policy.
-- No hidden long-running background daemon: check-ins are interval-gated and lightweight.
+- No standalone check-in command: check-ins are triggered from loop cadence (not from advisor internals), using higher/advanced advisor models first with regular model fallback enabled by default.
 
 ## Keep scope clear
 
@@ -43,6 +42,6 @@ The advisor surface is separate from orchestration (`goal`/`loop`/`autoresearch`
 
 - `mode: auto`
 - `review: light`
-- `checkins: off` by default; orchestration enables them while a goal/autoresearch flow is active
+- `checkins: off` by default; loop orchestration owns cadence and enables them when active
 - `checkinIntervalMinutes: 30`
 - `model: auto`

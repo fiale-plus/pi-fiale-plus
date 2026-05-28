@@ -1,14 +1,15 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { appendText, featureFile, readText, sessionFile, sessionKey, truncate } from "./internal.js";
 import { clearResearchState, hasActiveResearch } from "./autoresearch-state.js";
 import { setAdvisorCheckinsEnabled } from "./advisor-checkins.js";
 import { buildGoalCheckPrompt, beginGoalCheck, hasGoalCheckPending } from "./goal-resolution.js";
-import { readText, sessionFile, sessionKey, truncate } from "./internal.js";
 import { readSessionJson, writeSessionJson } from "./state.js";
 import { loopArgumentCompletions } from "./completions.js";
 
 const FEATURE = "orchestration";
 const LOOP_FILE = "loop.json";
 const GOAL_FILE = "goal.md";
+const LOOP_HISTORY_FILE = featureFile(FEATURE, "loop-history.jsonl");
 const MIN_INTERVAL_MS = 60_000;
 const loopTimers = new Map<string, NodeJS.Timeout>();
 
@@ -46,13 +47,24 @@ function clearLoopState(ctx: any): LoopState {
   return writeLoopState(ctx, defaultLoopState());
 }
 
+function archiveLoopState(ctx: any, previous: LoopState): void {
+  if (!previous.enabled && !previous.instruction && !previous.interval) return;
+  appendText(LOOP_HISTORY_FILE, `${JSON.stringify({
+    at: new Date().toISOString(),
+    session: sessionKey(ctx),
+    previous,
+  })}\n`);
+}
+
 export function clearLoop(ctx: any, options: { clearResearch?: boolean } = {}): LoopState {
+  const current = readLoopState(ctx);
+  archiveLoopState(ctx, current);
   const next = clearLoopState(ctx);
   stopLoopTimer(sessionKey(ctx));
   setLoopStatus(ctx, next);
+  setAdvisorCheckinsEnabled(false);
   if (options.clearResearch) {
     clearResearchState(ctx);
-    setAdvisorCheckinsEnabled(Boolean(activeGoal(ctx)));
   }
   return next;
 }
@@ -95,6 +107,23 @@ function stopLoopTimer(key: string): void {
   }
 }
 
+let advisorLoopCheckinFn: ((pi: ExtensionAPI, ctx: any, source?: string) => Promise<boolean>) | null | undefined;
+
+async function runAdvisorCheckinTick(pi: ExtensionAPI, ctx: any): Promise<void> {
+  if (advisorLoopCheckinFn === undefined) {
+    try {
+      const advisor = await import("@fiale-plus/pi-rogue-advisor");
+      const candidate = (advisor as { requestAdvisorLoopCheckin?: (pi: ExtensionAPI, ctx: any, source?: string) => Promise<boolean> }).requestAdvisorLoopCheckin;
+      advisorLoopCheckinFn = typeof candidate === "function" ? candidate : null;
+    } catch {
+      advisorLoopCheckinFn = null;
+    }
+  }
+
+  if (!advisorLoopCheckinFn) return;
+  await advisorLoopCheckinFn(pi, ctx, "loop_tick");
+}
+
 function runLoopTick(pi: ExtensionAPI, ctx: any): boolean {
   const key = sessionKey(ctx);
   const current = readLoopState(ctx);
@@ -113,6 +142,7 @@ function runLoopTick(pi: ExtensionAPI, ctx: any): boolean {
   }
 
   if (activeGoal(ctx) && hasGoalCheckPending(ctx)) {
+    void runAdvisorCheckinTick(pi, ctx);
     return false;
   }
 
@@ -129,6 +159,7 @@ function runLoopTick(pi: ExtensionAPI, ctx: any): boolean {
     pi.sendUserMessage(prompt, { deliverAs: "followUp" });
   }
 
+  void runAdvisorCheckinTick(pi, ctx);
   return true;
 }
 
@@ -139,15 +170,18 @@ function syncLoopTimer(pi: ExtensionAPI, ctx: any): void {
   const state = readLoopState(ctx);
   setLoopStatus(ctx, state);
   if (!state.enabled || !state.instruction) {
+    setAdvisorCheckinsEnabled(false);
     return;
   }
 
   const intervalMs = parseIntervalMs(state.interval);
   if (intervalMs === null) {
     ctx.ui.notify("Loop interval must be at least 1m (e.g. 1m, 5m, 1h).", "warning");
+    setAdvisorCheckinsEnabled(false);
     return;
   }
 
+  setAdvisorCheckinsEnabled(true);
   const tick = () => {
     const currentIntervalMs = parseIntervalMs(readLoopState(ctx).interval);
     if (currentIntervalMs === null || currentIntervalMs !== intervalMs) {
@@ -172,6 +206,7 @@ export function startLoop(pi: ExtensionAPI, ctx: any, interval: string, instruct
     instruction,
     updatedAt: "",
   });
+  setAdvisorCheckinsEnabled(true);
   setLoopStatus(ctx, next);
   syncLoopTimer(pi, ctx);
   if (options.triggerNow) {
@@ -221,6 +256,7 @@ export function registerLoop(pi: ExtensionAPI): void {
         return;
       }
 
+      clearLoop(ctx, { clearResearch: true });
       const next = startLoop(pi, ctx, interval, instruction);
       if (!next) {
         ctx.ui.notify("Usage: /loop <interval> <instruction> (e.g. 1m, 5m, 1h)", "error");

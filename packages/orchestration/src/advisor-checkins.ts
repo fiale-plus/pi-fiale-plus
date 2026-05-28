@@ -16,9 +16,11 @@ function readJson(file: string): AdvisorConfig {
 }
 
 export function setAdvisorCheckinsEnabled(enabled: boolean, configPath = ADVISOR_CONFIG_PATH): AdvisorConfig {
+  const current = readJson(configPath);
   const next: AdvisorConfig = {
-    ...readJson(configPath),
+    ...current,
     checkins: enabled ? "mid-hour" : "off",
+    checkinStartedAt: enabled ? Date.now() : undefined,
   };
   mkdirSync(dirname(configPath), { recursive: true });
   writeFileSync(configPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");

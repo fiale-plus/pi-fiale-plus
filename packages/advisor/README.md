@@ -2,7 +2,7 @@
 
 ## What this package is
 
-Strategic advisor for Pi sessions with low-overhead preflight/post-review routing, model auto-detection, session memory, and optional mid-session check-ins.
+Strategic advisor for Pi sessions with low-overhead preflight/post-review routing, model auto-detection, session memory, and orchestration-managed mid-session check-ins.
 
 - SOTA-first model fallback: `gpt-5.5`/`claude-opus-4-6`/`claude-sonnet-4-6` where available.
 - Keeps command-level behavior simple and explicit.
@@ -28,7 +28,6 @@ npm install --workspace packages/advisor
 | `/advisor off` | Disable advisor |
 | `/advisor mode auto\|manual\|off` | Change routing behavior |
 | `/advisor review light\|strict\|off` | Change review strictness |
-| `/advisor checkins on\|off\|<minutes>` | Enable/disable low-cost mid-hour check-ins |
 | `/advisor config` | Show current config |
 | `/advisor model <provider>/<model>` | Set explicit model override |
 | `/advisor <question>` | Get one-shot advisory response |
@@ -37,11 +36,11 @@ npm install --workspace packages/advisor
 
 - `mode`: `auto`
 - `review`: `light`
-- `checkins`: `off` (orchestration turns them on while a goal/autoresearch flow is active)
+- `checkins`: `off` (orchestration turns them on when a loop is active)
 - `checkinIntervalMinutes`: `30`
 - `model`: not set (auto-detected)
 
-Check-ins gate on session activity, are bounded, and avoid overlapping calls. They can still be controlled explicitly with `/advisor checkins on|off|<minutes>`.
+Check-ins gate on session activity, are bounded, avoid overlapping calls, and use higher/advanced advisor models first with regular model fallback enabled by default. They are lifecycle-managed by orchestration: enabling `/loop` enables them, and stopping that loop disables them.
 
 ## Stability guarantees
 

@@ -4,7 +4,8 @@ import { advisorArgumentCompletions, piRogueArgumentCompletions } from "./comple
 describe("advisor completions", () => {
   it("offers top-level advisor continuations", () => {
     const values = advisorArgumentCompletions("")?.map((i) => i.value);
-    expect(values).toEqual(expect.arrayContaining(["status", "config", "checkins", "review"]));
+    expect(values).toEqual(expect.arrayContaining(["status", "config", "model", "review"]));
+    expect(values).not.toContain("checkins");
   });
 
   it("offers nested review choices", () => {
@@ -12,10 +13,6 @@ describe("advisor completions", () => {
     expect(values).toEqual(["light", "strict", "off"]);
   });
 
-  it("offers check-in choices", () => {
-    const values = advisorArgumentCompletions("checkins ")?.map((i) => i.value);
-    expect(values).toEqual(expect.arrayContaining(["on", "off", "30", "60"]));
-  });
 });
 
 describe("pi-rogue cockpit completions", () => {

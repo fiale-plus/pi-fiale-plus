@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { basename } from "node:path";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Box, Text } from "@earendil-works/pi-tui";
 import { completeSimple, type ThinkingLevel } from "@earendil-works/pi-ai";
@@ -31,6 +32,8 @@ export interface AdvisorConfig {
   checkins: "mid-hour" | "off";
   /** Minutes between check-ins; bounded and cheap-gated by recent activity. */
   checkinIntervalMinutes: number;
+  /** Optional start time (ms since epoch) for the active check-in stream. */
+  checkinStartedAt?: number;
   /** Optional model override. Auto-detects SOTA (gpt-5.5, claude-opus-4-6…) if unset */
   model?: string;
 }
@@ -47,16 +50,14 @@ const STATE_PATH = featureFile("advisor", "state.json");
 const CACHE_PATH = featureFile("advisor", "cache.json");
 const CURRENT_PATH = featureFile("advisor", "current.md");
 const HISTORY_PATH = featureFile("advisor", "history.jsonl");
+const ORCHESTRATION_DIR = join(homedir(), ".pi", "agent", "fiale-plus", "orchestration");
 
 const MAX_CACHE = 64;
 const MAX_NOTES = 12;
 const MAX_FILES = 8;
 const MAX_ERRORS = 5;
-const CHECKIN_POLL_MS = 5 * 60_000;
 const MIN_CHECKIN_INTERVAL_MINUTES = 10;
 const MAX_CHECKIN_INTERVAL_MINUTES = 240;
-const checkinTimers = new Map<string, NodeJS.Timeout>();
-const checkinStartedAt = new Map<string, number>();
 const checkinLocks = new Set<string>();
 
 // ── SOTA models (ordered by preference) ───────────────────────────────────
@@ -85,6 +86,8 @@ interface SessionState {
     lastAt?: string;
     lastTurn?: number;
     lastReason?: string;
+    queued?: boolean;
+    queuedReason?: string;
   };
 }
 
@@ -99,7 +102,7 @@ function defaultState(): SessionState {
     cacheHits: 0,
     followUp: "",
     router: {},
-    checkin: {},
+    checkin: { queued: false },
   };
 }
 
@@ -118,11 +121,13 @@ function writeJson(path: string, v: unknown) {
 
 export function normalizeAdvisorConfig(raw: Partial<AdvisorConfig> = {}): AdvisorConfig {
   const interval = Number(raw.checkinIntervalMinutes ?? DEFAULT_CONFIG.checkinIntervalMinutes);
+  const startedAt = Number(raw.checkinStartedAt);
   return {
     mode: (raw.mode === "manual" || raw.mode === "off") ? raw.mode : "auto",
     review: (raw.review === "strict" || raw.review === "off") ? raw.review : "light",
     checkins: raw.checkins === "mid-hour" ? "mid-hour" : DEFAULT_CONFIG.checkins,
     checkinIntervalMinutes: Math.min(MAX_CHECKIN_INTERVAL_MINUTES, Math.max(MIN_CHECKIN_INTERVAL_MINUTES, Number.isFinite(interval) ? Math.round(interval) : DEFAULT_CONFIG.checkinIntervalMinutes)),
+    checkinStartedAt: Number.isFinite(startedAt) ? startedAt : undefined,
     model: raw.model || undefined,
   };
 }
@@ -154,6 +159,8 @@ function loadState(): SessionState {
       lastAt: raw.checkin?.lastAt,
       lastTurn: raw.checkin?.lastTurn,
       lastReason: raw.checkin?.lastReason,
+      queued: Boolean(raw.checkin?.queued),
+      queuedReason: raw.checkin?.queuedReason,
     },
   };
 }
@@ -299,6 +306,40 @@ function sessionKey(ctx: any): string {
   return basename(String(sessionFile)).replace(/\.[^.]+$/, "");
 }
 
+type OrchestrationSnapshot = {
+  goal: string;
+  loop: { enabled?: boolean; interval?: string; instruction?: string };
+  research: { instruction?: string; interval?: string; cycles?: number; doneAttempts?: number; lastResult?: string };
+};
+
+function readOrchestrationSnapshot(ctx: any): OrchestrationSnapshot {
+  const dir = join(ORCHESTRATION_DIR, sessionKey(ctx));
+  return {
+    goal: readText(join(dir, "goal.md")).trim(),
+    loop: readJson(join(dir, "loop.json"), {}),
+    research: readJson(join(dir, "autoresearch.json"), {}),
+  };
+}
+
+function orchestrationSnapshotText(ctx: any): string {
+  const snapshot = readOrchestrationSnapshot(ctx);
+  const goalActive = Boolean(snapshot.goal);
+  const loopActive = Boolean(snapshot.loop.enabled && snapshot.loop.instruction);
+  const researchActive = Boolean(snapshot.research.instruction);
+  const status = goalActive && !loopActive && !researchActive
+    ? "setup gap — goal exists but no active autoresearch/loop progression"
+    : goalActive
+      ? "progression configured"
+      : "no active goal";
+  return [
+    "Orchestration:",
+    `- Goal: ${goalActive ? `active — ${truncate(snapshot.goal, 140)}` : "off"}`,
+    `- Autoresearch: ${researchActive ? `active — cycles=${snapshot.research.cycles ?? 0}, doneAttempts=${snapshot.research.doneAttempts ?? 0}${snapshot.research.lastResult ? `, last=${snapshot.research.lastResult}` : ""}` : "off"}`,
+    `- Loop: ${loopActive ? `active every ${snapshot.loop.interval || "?"} — ${truncate(snapshot.loop.instruction || "", 120)}` : "off"}`,
+    `- Status: ${status}`,
+  ].join("\n");
+}
+
 function setPiRogueStatus(ctx: any, config = loadConfig(), state = loadState()): void {
   const normalized = normalizeAdvisorConfig(config);
   const checkin = normalized.checkins === "off" ? "checkins off" : `checkins ${normalized.checkinIntervalMinutes}m`;
@@ -310,22 +351,31 @@ export function shouldRunCheckin(config: AdvisorConfig, state: SessionState, now
   const normalized = normalizeAdvisorConfig(config);
   if (normalized.mode === "off" || normalized.mode === "manual") return null;
   if (normalized.checkins === "off") return null;
+  if (state.checkin.queued) {
+    return state.checkin.queuedReason || "Queued mid-session check-in.";
+  }
   if (!state.lastTask && state.notes.length === 0) return null;
   const lastTurn = state.checkin.lastTurn ?? 0;
   if (state.turns <= lastTurn) return null;
   const lastAt = state.checkin.lastAt ? Date.parse(state.checkin.lastAt) : 0;
   const intervalMs = normalized.checkinIntervalMinutes * 60_000;
-  const since = lastAt || startedAt;
+  const streamStartedAt = Number.isFinite(normalized.checkinStartedAt ?? NaN) ? (normalized.checkinStartedAt as number) : startedAt;
+  const since = Math.max(lastAt, streamStartedAt);
   if (since && now - since < intervalMs) return null;
   return `mid-hour check-in after ${state.turns - lastTurn} new turn(s)`;
 }
 
-function stopCheckinTimer(key: string): void {
-  const timer = checkinTimers.get(key);
-  if (timer) {
-    clearInterval(timer);
-    checkinTimers.delete(key);
+
+function isAdvisorIdle(ctx: any): boolean {
+  try {
+    return typeof ctx?.isIdle === "function" ? ctx.isIdle() : true;
+  } catch {
+    return true;
   }
+}
+
+export async function requestAdvisorLoopCheckin(pi: ExtensionAPI, ctx: any, source = "loop_tick"): Promise<boolean> {
+  return maybeAdvisorCheckin(pi, ctx, source);
 }
 
 async function maybeAdvisorCheckin(pi: ExtensionAPI, ctx: any, source: string): Promise<boolean> {
@@ -334,44 +384,68 @@ async function maybeAdvisorCheckin(pi: ExtensionAPI, ctx: any, source: string): 
 
   const config = loadConfig();
   const state = loadState();
-  const startedAt = checkinStartedAt.get(key) ?? Date.now();
-  const reason = shouldRunCheckin(config, state, Date.now(), startedAt);
-  setPiRogueStatus(ctx, config, state);
-  if (!reason) return false;
+  const reason = shouldRunCheckin(config, state, Date.now(), Date.now());
+  if (!reason) {
+    if (state.checkin.queued) {
+      state.checkin.queued = false;
+      saveState(state);
+      setPiRogueStatus(ctx, config, state);
+    }
+    return false;
+  }
+
+  if (!isAdvisorIdle(ctx)) {
+    if (!state.checkin.queued) {
+      state.checkin.queued = true;
+      state.checkin.queuedReason = reason;
+      saveState(state);
+      setPiRogueStatus(ctx, config, state);
+    }
+    return false;
+  }
 
   checkinLocks.add(key);
   try {
-    const response = await askAdvisor(
-      pi,
+    const completed = await completeWithHigherAdvisorModel(
       ctx,
-      `Mid-session check-in (${source}): briefly assess whether the current session is on track, stuck, or missing a higher-leverage next step. Return one concrete nudge.`,
-      "review",
-      true,
+      config,
+      [
+        `Mid-session check-in (${source}): briefly assess whether the current session is on track, stuck, or missing a higher-leverage next step.`,
+        orchestrationSnapshotText(ctx),
+        "If a goal exists but autoresearch/loop progression is off, call out the setup gap. Do not start or change orchestration; return one concrete nudge.",
+      ].join("\n\n"),
+      [
+        {
+          role: "user",
+          content: [
+            `Mid-session check-in (${source}): briefly assess whether the current session is on track, stuck, or missing a higher-leverage next step.`,
+            orchestrationSnapshotText(ctx),
+            "If a goal exists but autoresearch/loop progression is off, call out the setup gap. Do not start or change orchestration; return one concrete nudge.",
+          ].join("\n\n"),
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      { maxTokens: 600, reasoning: "medium" as ThinkingLevel },
     );
-    if (response.error) return false;
+    if (!completed) return false;
 
     const next = loadState();
-    next.checkin = { lastAt: new Date().toISOString(), lastTurn: next.turns, lastReason: reason };
+    next.checkin = {
+      lastAt: new Date().toISOString(),
+      lastTurn: next.turns,
+      lastReason: reason,
+      queued: false,
+    };
     saveState(next);
     setPiRogueStatus(ctx, config, next);
-    sendAdvisorHint(pi, "review", "mid-hour check-in", response.text, [response.text]);
+    sendAdvisorHint(pi, "review", "mid-hour check-in", completed.text, [completed.text]);
     return true;
   } finally {
     checkinLocks.delete(key);
   }
 }
 
-function syncCheckinTimer(pi: ExtensionAPI, ctx: any): void {
-  const key = sessionKey(ctx);
-  stopCheckinTimer(key);
-  checkinStartedAt.set(key, Date.now());
-  setPiRogueStatus(ctx);
-  const config = loadConfig();
-  if (config.mode === "off" || config.mode === "manual" || config.checkins === "off") return;
-  checkinTimers.set(key, setInterval(() => { void maybeAdvisorCheckin(pi, ctx, "timer"); }, CHECKIN_POLL_MS));
-}
-
-function piRogueCockpitText(config: AdvisorConfig, state: SessionState, currentNote: string): string {
+function piRogueCockpitText(config: AdvisorConfig, state: SessionState, currentNote: string, orchestration = ""): string {
   const normalized = normalizeAdvisorConfig(config);
   return [
     "☠︎ Pi-Rogue cockpit",
@@ -379,35 +453,95 @@ function piRogueCockpitText(config: AdvisorConfig, state: SessionState, currentN
     `Mode: ${normalized.mode} | Review: ${normalized.review} | Check-ins: ${normalized.checkins === "off" ? "off" : `${normalized.checkinIntervalMinutes}m`}`,
     `Turns: ${state.turns} | Advisor calls: ${state.advisorCalls} | Cache hits: ${state.cacheHits}`,
     state.checkin.lastAt ? `Last check-in: ${new Date(state.checkin.lastAt).toLocaleString()} (${state.checkin.lastReason || "mid-hour"})` : "Last check-in: never",
+    state.checkin.queued ? `Queued check-in: ${state.checkin.queuedReason || "due"}` : "",
+    orchestration,
     "",
-    "Commands: /advisor status · /advisor checkins on|off|<minutes> · /goal · /loop status · /autoresearch status",
-  ].join("\n");
+    "Commands: /advisor status · /goal · /loop status · /autoresearch status",
+  ].filter(Boolean).join("\n");
 }
 
-// ── Model resolution (auto-fallback through SOTA chain) ────────────────────
-async function resolveModel(ctx: any, config: AdvisorConfig): Promise<{ model: any; auth: any; label: string } | null> {
-  // Try user's configured model first
+// ── Model resolution (higher/advanced first, then optional regular fallback) ──
+type ResolvedAdvisorModel = { model: any; auth: any; label: string; fallback?: boolean };
+type ModelResolutionOptions = { allowRegularFallback?: boolean };
+
+export async function resolveModelCandidates(ctx: any, config: AdvisorConfig, options: ModelResolutionOptions = {}): Promise<ResolvedAdvisorModel[]> {
+  const { allowRegularFallback = true } = options;
+  const candidates: ResolvedAdvisorModel[] = [];
+  const seen = new Set<string>();
+  const add = async (found: any, label: string, fallback = false) => {
+    if (!found) return;
+    const key = String(found.id || label);
+    if (seen.has(key)) return;
+    const auth = await ctx.modelRegistry?.getApiKeyAndHeaders(found);
+    if (auth?.ok && auth.apiKey) {
+      seen.add(key);
+      candidates.push({ model: found, auth, label, fallback });
+    }
+  };
+
+  // Try configured higher/advanced advisor model first.
   if (config.model && config.model.includes("/")) {
     const [p, ...m] = config.model.split("/");
-    const found = ctx.modelRegistry?.find(p, m.join("/"));
-    if (found) {
-      const auth = await ctx.modelRegistry.getApiKeyAndHeaders(found);
-      if (auth?.ok && auth.apiKey) return { model: found, auth, label: p + "/" + m.join("/") };
+    await add(ctx.modelRegistry?.find(p, m.join("/")), p + "/" + m.join("/"));
+  }
+
+  // Fall through SOTA chain.
+  for (const sota of SOTA_CHAIN) {
+    await add(ctx.modelRegistry?.find(sota.provider, sota.model), sota.label);
+  }
+
+  if (allowRegularFallback) {
+    // Final fallback: any configured text model, i.e. the regular session-capable model.
+    for (const m of (ctx.modelRegistry?.getAvailable() ?? []).filter((model: any) => model.input?.includes?.("text"))) {
+      await add(m, m.id || "regular model", true);
     }
   }
-  // Fall through SOTA chain
-  for (const sota of SOTA_CHAIN) {
-    const found = ctx.modelRegistry?.find(sota.provider, sota.model);
-    if (!found) continue;
-    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(found);
-    if (auth?.ok && auth.apiKey) return { model: found, auth, label: sota.label };
+
+  return candidates;
+}
+
+async function resolveModel(ctx: any, config: AdvisorConfig): Promise<ResolvedAdvisorModel | null> {
+  return (await resolveModelCandidates(ctx, config))[0] ?? null;
+}
+
+export async function completeWithModelFallback(ctx: any, config: AdvisorConfig, systemPrompt: string, messages: any[], options: { maxTokens: number; reasoning: ThinkingLevel }): Promise<{ text: string; model: string; fallback?: boolean } | null> {
+  let lastError = "";
+  for (const resolved of await resolveModelCandidates(ctx, config)) {
+    try {
+      const resp = await completeSimple(resolved.model, { systemPrompt, messages }, {
+        apiKey: resolved.auth.apiKey,
+        headers: resolved.auth.headers,
+        maxTokens: options.maxTokens,
+        reasoning: options.reasoning,
+      });
+      return { text: responseText(resp) || "(empty)", model: resolved.label, fallback: resolved.fallback };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
   }
-  // Any text model
-  const avail = (ctx.modelRegistry?.getAvailable() ?? []).filter((m: any) => m.input?.includes?.("text"));
-  if (avail.length) {
-    const m = avail[0];
-    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(m);
-    if (auth?.ok && auth.apiKey) return { model: m, auth, label: m.id || "unknown" };
+  return lastError ? { text: `No advisor/check-in model completed successfully (${lastError}).`, model: "none" } : null;
+}
+
+export async function completeWithHigherAdvisorModel(
+  ctx: any,
+  config: AdvisorConfig,
+  systemPrompt: string,
+  messages: any[],
+  options: { maxTokens: number; reasoning: ThinkingLevel; allowRegularFallback?: boolean },
+): Promise<{ text: string; model: string } | null> {
+  const { allowRegularFallback = true } = options;
+  for (const resolved of await resolveModelCandidates(ctx, config, { allowRegularFallback })) {
+    try {
+      const resp = await completeSimple(resolved.model, { systemPrompt, messages }, {
+        apiKey: resolved.auth.apiKey,
+        headers: resolved.auth.headers,
+        maxTokens: options.maxTokens,
+        reasoning: options.reasoning,
+      });
+      return { text: responseText(resp) || "(empty)", model: resolved.label };
+    } catch {
+      // keep trying remaining candidates
+    }
   }
   return null;
 }
@@ -421,22 +555,17 @@ async function askAdvisor(pi: ExtensionAPI, ctx: any, question: string, scope: s
   const cache = loadCache();
   if (cache[ck]) { state.cacheHits++; saveState(state); return { text: cache[ck], cached: true }; }
 
-  const resolved = await resolveModel(ctx, config);
-  if (!resolved) return { text: "No model available. Install one via pi config.", error: "no_model" };
-
   const msgs = [
     { role: "user", content: [ `Question: ${question}`, scope ? `Scope: ${scope}` : "", includeWork && brief(state) ? `Session:\n${brief(state)}` : "" ].filter(Boolean).join("\n"), timestamp: new Date().toISOString() },
   ] as any[];
 
-  const resp = await completeSimple(resolved.model, { systemPrompt: ADVISOR_SYSTEM, messages: msgs as any }, {
-    apiKey: resolved.auth.apiKey, headers: resolved.auth.headers,
-    maxTokens: 600, reasoning: "medium" as ThinkingLevel,
-  });
-  const text = responseText(resp) || "(empty)";
+  const completed = await completeWithModelFallback(ctx, config, ADVISOR_SYSTEM, msgs, { maxTokens: 600, reasoning: "medium" as ThinkingLevel });
+  if (!completed) return { text: "No model available. Install one via pi config.", error: "no_model" };
+  const text = completed.text;
   if (text && text !== "(empty)") { cache[ck] = text; saveCache(cache); }
   state.advisorCalls++;
   saveState(state);
-  return { text, model: resolved.label };
+  return { text, model: completed.model, fallback: completed.fallback };
 }
 
 async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: string, meta: { fileChanged: boolean; failed: boolean; isAgentEnd: boolean }) {
@@ -492,8 +621,6 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
   const cache = loadCache();
   if (cache[rk]) return; // already reviewed this
 
-  const resolved = await resolveModel(ctx, config);
-  if (!resolved) return;
   const msgs = [
     { role: "user", content: [
       `Trigger: ${trigger}`,
@@ -504,11 +631,8 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
       `Brief:\n${b}`,
     ].join("\n"), timestamp: new Date().toISOString() },
   ] as any[];
-  const resp = await completeSimple(resolved.model, { systemPrompt: REVIEW_SYSTEM, messages: msgs as any }, {
-    apiKey: resolved.auth.apiKey, headers: resolved.auth.headers,
-    maxTokens: 400, reasoning: "low" as ThinkingLevel,
-  });
-  const raw = responseText(resp);
+  const completed = await completeWithModelFallback(ctx, config, REVIEW_SYSTEM, msgs, { maxTokens: 400, reasoning: "low" as ThinkingLevel });
+  const raw = completed?.text;
   if (!raw) return;
 
   cache[rk] = raw;
@@ -544,13 +668,15 @@ export function registerAdvisor(pi: ExtensionAPI): void {
   }
 
   pi.on("session_start", (_event, ctx) => {
-    syncCheckinTimer(pi, ctx);
+    const key = sessionKey(ctx);
+    checkinLocks.delete(key);
+    setPiRogueStatus(ctx, loadConfig(), loadState());
+    // No timer is owned by advisor itself anymore; check-ins are triggered
+    // from active goal/loop/autoresearch flow progression.
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
     const key = sessionKey(ctx);
-    stopCheckinTimer(key);
-    checkinStartedAt.delete(key);
     checkinLocks.delete(key);
     ctx.ui.setStatus("pi-rogue", undefined);
   });
@@ -654,8 +780,10 @@ export function registerAdvisor(pi: ExtensionAPI): void {
   // ── Post-review (agent_end) ────────────────────────────────────────────
   pi.on("agent_end", async (event: any, ctx: any) => {
     const cfg = loadConfig();
-    if (cfg.mode === "off" || cfg.review === "off") return;
-    const state = loadState();
+    if (cfg.mode === "off") return;
+    void maybeAdvisorCheckin(pi, ctx, "agent_end");
+
+    if (cfg.review === "off") return;
     const msgs = (event.messages || []).filter((m: any) => m.role === "assistant" || m.role === "toolResult");
     const last = msgs[msgs.length - 1];
     const delta = contentText(last?.content) || "(none)";
@@ -666,7 +794,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
 
   // ── /pi-rogue cockpit ──────────────────────────────────────────────────
   pi.registerCommand("pi-rogue", {
-    description: "Show Pi-Rogue cockpit: advisor, check-ins, and orchestration command pointers",
+    description: "Show Pi-Rogue cockpit: advisor and orchestration command pointers",
     getArgumentCompletions: (prefix: string) => piRogueArgumentCompletions(prefix),
     handler: async (args, ctx) => {
       const cfg = loadConfig();
@@ -675,7 +803,7 @@ export function registerAdvisor(pi: ExtensionAPI): void {
       setPiRogueStatus(ctx, cfg, state);
 
       if (!arg || arg === "status" || arg === "help") {
-        ctx.ui.notify(piRogueCockpitText(cfg, state, readText(CURRENT_PATH).trim()), "info");
+        ctx.ui.notify(piRogueCockpitText(cfg, state, readText(CURRENT_PATH).trim(), orchestrationSnapshotText(ctx)), "info");
         return;
       }
 
@@ -684,8 +812,9 @@ export function registerAdvisor(pi: ExtensionAPI): void {
           "Advisor surface:",
           "  /advisor status",
           "  /advisor config",
-          "  /advisor checkins on|off|<minutes>",
           "  /advisor <question>",
+          "",
+          "Check-ins are orchestration-managed: start /loop to activate them.",
         ].join("\n"), "info");
         return;
       }
@@ -703,13 +832,14 @@ export function registerAdvisor(pi: ExtensionAPI): void {
 
       if (arg.startsWith("checkins")) {
         ctx.ui.notify([
-          `Advisor check-ins: ${cfg.checkins === "off" ? "off" : `${cfg.checkinIntervalMinutes}m`}`,
-          "Use /advisor checkins on|off|<minutes> to change it.",
+          `Check-ins: ${cfg.checkins === "off" ? "off" : `${cfg.checkinIntervalMinutes}m`}`,
+          "Managed by orchestration: /loop activates them; stopping the loop disables them.",
+          orchestrationSnapshotText(ctx),
         ].join("\n"), "info");
         return;
       }
 
-      ctx.ui.notify(piRogueCockpitText(cfg, state, readText(CURRENT_PATH).trim()), "info");
+      ctx.ui.notify(piRogueCockpitText(cfg, state, readText(CURRENT_PATH).trim(), orchestrationSnapshotText(ctx)), "info");
     },
   });
 
@@ -731,22 +861,48 @@ export function registerAdvisor(pi: ExtensionAPI): void {
           note ? `🧭 ${truncate(note, 200)}` : "",
           route ? `Router: ${summarizeRoute(route)}${route.safety ? " · safety" : ""}` : "",
           "",
-          `Mode: ${cfg.mode} | Review: ${cfg.review} | Check-ins: ${cfg.checkins === "off" ? "off" : `${cfg.checkinIntervalMinutes}m`} | Model: ${resolved?.label || cfg.model || "auto"}`,
+          `Mode: ${cfg.mode} | Review: ${cfg.review} | Check-ins: ${cfg.checkins === "off" ? "off" : `${cfg.checkinIntervalMinutes}m`} (orchestration-managed) | Model: ${resolved?.label || cfg.model || "auto"}`,
           `Turns: ${state.turns} | Calls: ${state.advisorCalls} | Cache hits: ${state.cacheHits}`,
           state.checkin.lastAt ? `Last check-in: ${new Date(state.checkin.lastAt).toLocaleString()} (${state.checkin.lastReason || "mid-hour"})` : "Last check-in: never",
+          state.checkin.queued ? `Queued check-in: ${state.checkin.queuedReason || "due"}` : "",
+          orchestrationSnapshotText(ctx),
           "",
-          "Commands: /advisor on|off | /advisor status | /advisor checkins on|off|<minutes> | /advisor config | <question>",
+          "Commands: /advisor on|off | /advisor status | /advisor config | <question>",
           "Tip: SOTA models auto-detected. No config needed.",
         ].filter(Boolean).join("\n"), "info");
         return;
       }
 
-      if (cmd === "on" && cfg.mode === "off") { const next = { ...cfg, mode: "auto" as const }; saveConfig(next); syncCheckinTimer(pi, ctx); ctx.ui.notify("Advisor enabled (auto mode).", "info"); return; }
-      if (cmd === "off") { const next = { ...cfg, mode: "off" as const }; saveConfig(next); stopCheckinTimer(sessionKey(ctx)); setPiRogueStatus(ctx, next, state); ctx.ui.notify("Advisor disabled.", "info"); return; }
+      if (cmd === "on" && cfg.mode === "off") {
+        const next = { ...cfg, mode: "auto" as const };
+        saveConfig(next);
+        setPiRogueStatus(ctx, next, state);
+        ctx.ui.notify("Advisor enabled (auto mode).", "info");
+        return;
+      }
+      if (cmd === "off") {
+        const next = { ...cfg, mode: "off" as const };
+        saveConfig(next);
+        setPiRogueStatus(ctx, next, state);
+        ctx.ui.notify("Advisor disabled.", "info");
+        return;
+      }
       if (cmd === "mode") {
         const v = rest[0];
-        if (v === "auto" || v === "manual") { const next: AdvisorConfig = { ...cfg, mode: v }; saveConfig(next); syncCheckinTimer(pi, ctx); ctx.ui.notify(`Mode set to ${v}.`, "info"); return; }
-        if (v === "off") { const next = { ...cfg, mode: "off" as const }; saveConfig(next); stopCheckinTimer(sessionKey(ctx)); setPiRogueStatus(ctx, next, state); ctx.ui.notify("Advisor disabled.", "info"); return; }
+        if (v === "auto" || v === "manual") {
+          const next: AdvisorConfig = { ...cfg, mode: v };
+          saveConfig(next);
+          setPiRogueStatus(ctx, next, state);
+          ctx.ui.notify(`Mode set to ${v}.`, "info");
+          return;
+        }
+        if (v === "off") {
+          const next = { ...cfg, mode: "off" as const };
+          saveConfig(next);
+          setPiRogueStatus(ctx, next, state);
+          ctx.ui.notify("Advisor disabled.", "info");
+          return;
+        }
         ctx.ui.notify("Usage: /advisor mode auto|manual|off", "error");
         return;
       }
@@ -769,12 +925,12 @@ export function registerAdvisor(pi: ExtensionAPI): void {
       }
       if (cmd === "config") {
         ctx.ui.notify([
-          "Advisor config (5 fields, all optional):",
+          "Advisor config (check-ins are orchestration-managed):",
           `  mode: "${cfg.mode}" — auto (preflight+post+cache) | manual | off`,
           `  review: "${cfg.review}" — light (changes/errors) | strict (every 3) | off`,
-          `  checkins: "${cfg.checkins}" — mid-hour | off`,
+          `  checkins: "${cfg.checkins}" — set by active /loop lifecycle`,
           `  checkinIntervalMinutes: ${cfg.checkinIntervalMinutes}`,
-          `  model: "${cfg.model || "auto"}" — optional override`,
+          `  model: "${cfg.model || "auto"}" — optional override for higher/advanced advisor model`,
           "",
           "Router logs: evals/advisor-router.jsonl",
           "Run /advisor <question> for immediate advice.",
@@ -788,31 +944,12 @@ export function registerAdvisor(pi: ExtensionAPI): void {
         return;
       }
       if (cmd === "checkins" || cmd === "checkin") {
-        const v = rest[0];
-        if (v === "off") {
-          const next = { ...cfg, checkins: "off" as const };
-          saveConfig(next);
-          stopCheckinTimer(sessionKey(ctx));
-          setPiRogueStatus(ctx, next, state);
-          ctx.ui.notify("Advisor mid-hour check-ins disabled.", "info");
-          return;
-        }
-        if (v === "on" || v === "mid-hour") {
-          const next = { ...cfg, checkins: "mid-hour" as const };
-          saveConfig(next);
-          syncCheckinTimer(pi, ctx);
-          ctx.ui.notify(`Advisor mid-hour check-ins enabled every ${next.checkinIntervalMinutes}m.`, "info");
-          return;
-        }
-        const minutes = Number(v);
-        if (Number.isFinite(minutes)) {
-          const next = normalizeAdvisorConfig({ ...cfg, checkins: "mid-hour", checkinIntervalMinutes: minutes });
-          saveConfig(next);
-          syncCheckinTimer(pi, ctx);
-          ctx.ui.notify(`Advisor mid-hour check-ins every ${next.checkinIntervalMinutes}m.`, "info");
-          return;
-        }
-        ctx.ui.notify("Usage: /advisor checkins on|off|<minutes>", "error");
+        ctx.ui.notify([
+          "Advisor check-ins are orchestration-managed now.",
+          `Current: ${cfg.checkins === "off" ? "off" : `${cfg.checkinIntervalMinutes}m`}`,
+          "Create or resume /loop to activate scheduled higher-model check-ins; stop the loop to disable them.",
+          orchestrationSnapshotText(ctx),
+        ].join("\n"), "info");
         return;
       }
 
