@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendText, contentText, featureFile, readText, sessionFile, truncate, writeText } from "./internal.js";
 import { shouldHoldResearchOpen, type ResearchCheckResult } from "./autoresearch-completion.js";
 import { clearResearchStateForGoal, readResearchState, writeResearchState, type ResearchState } from "./autoresearch-state.js";
-import { endGoalCheck, goalCheckResult, hasGoalCheckPending } from "./goal-resolution.js";
+import { beginGoalCheck, buildGoalCheckPrompt, endGoalCheck, goalCheckResult, hasGoalCheckPending } from "./goal-resolution.js";
 import { clearLoop, triggerLoopTick } from "./loop.js";
 import { goalArgumentCompletions } from "./completions.js";
 
@@ -73,6 +73,27 @@ function researchForGoal(ctx: any, goal: string): ResearchState | null {
   const state = readResearchState(ctx);
   if (!state.instruction || !state.goal || state.goal !== goal) return null;
   return state;
+}
+
+export type GoalProcessingStartResult = "loop" | "standalone" | "pending";
+
+export function startGoalProcessing(pi: ExtensionAPI, ctx: any, goal: string): GoalProcessingStartResult {
+  if (hasGoalCheckPending(ctx)) {
+    return "pending";
+  }
+
+  if (triggerLoopTick(pi, ctx)) {
+    return "loop";
+  }
+
+  beginGoalCheck(ctx);
+  const prompt = buildGoalCheckPrompt(goal, "Start processing the goal immediately.");
+  if (ctx.isIdle?.() === false) {
+    pi.sendUserMessage(prompt, { deliverAs: "followUp" });
+  } else {
+    pi.sendUserMessage(prompt);
+  }
+  return "standalone";
 }
 
 export function recordResearchCheck(ctx: any, state: ResearchState, result: ResearchCheckResult): ResearchState {
@@ -190,8 +211,8 @@ export function registerGoal(pi: ExtensionAPI): void {
 
       setGoal(ctx, text);
       setGoalStatus(ctx, text);
-      triggerLoopTick(pi, ctx);
-      ctx.ui.notify(`🎯 Goal set: ${truncate(text, 160)}`, "info");
+      const started = startGoalProcessing(pi, ctx, text);
+      ctx.ui.notify(`🎯 Goal set: ${truncate(text, 160)}${started === "pending" ? " (goal processing already pending)" : " — processing started"}`, "info");
     },
   });
 }
