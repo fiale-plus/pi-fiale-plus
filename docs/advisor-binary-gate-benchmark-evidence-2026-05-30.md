@@ -57,6 +57,20 @@
 | continue precision | 0.9407 | 0.9756 |
 | continue recall | 0.9706 | 0.9523 |
 
+### Alternative merged-control comparisons (for model selection)
+Additional merged benchmark runs were generated from existing internal candidates:
+- `docs/benchmark-evidence/binary-gate-eval-bench-control-merged-alt.json` (control candidate)
+- `docs/benchmark-evidence/binary-gate-eval-bench-weighted-merged-alt.json` (weighted candidate)
+
+| candidate | model source | accuracy | escalate precision | escalate recall | continue precision | continue recall |
+|---|---|---:|---:|---:|---:|---:|
+| baseline shipped | `binary-gate-model-baseline.json` | 95.31% | 0.9673 | 0.9344 | 0.9407 | 0.9706 |
+| updated terminal-bench tuned | `binary-gate-model-updated.json` | **96.30%** | 0.9501 | 0.9744 | 0.9756 | 0.9523 |
+| control candidate | `binary-gate-file-eval-bench-control-merged-alt.json` | 95.48% | 0.9554 | 0.9506 | 0.9541 | 0.9587 |
+| weighted candidate | `binary-gate-file-eval-bench-weighted-merged-alt.json` | 94.61% | 0.9423 | 0.9463 | 0.9497 | 0.9459 |
+
+Selected model for promotion is the terminal-bench tuned updated artifact due highest merged-set accuracy.
+
 ### Runtime benchmark (`npm run binary:benchmark`)
 - Old model evidence file: `docs/benchmark-evidence/binary-gate-benchmark-internal-old.txt`
 - New model evidence file: `docs/benchmark-evidence/binary-gate-benchmark-new.txt`
