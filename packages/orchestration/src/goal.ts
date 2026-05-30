@@ -35,6 +35,7 @@ export function setGoal(ctx: any, goal: string): void {
 
 export function clearGoal(ctx: any): void {
   writeText(sessionFile(FEATURE, ctx, CURRENT_FILE), "");
+  resetAdvisorSessionContext();
 }
 
 function goalBlock(goal: string): string {
