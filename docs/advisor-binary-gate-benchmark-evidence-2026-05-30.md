@@ -80,8 +80,12 @@ BINARY_GATE_MODEL_PATH=packages/advisor/assets/binary-gate-model.json npm run bi
 ```
 
 ### Verification trail
-- Commit: `2655a97`
-- Tracked evidence files now in git:
+- Commit history (latest-to-earliest):
+  - `0034b67` — docs(advisor): correct merged-bench metric figures
+  - `50599b0` — docs(advisor): include merged terminal-bench gate eval evidence
+  - `69a9f6d` — docs(advisor): persist binary-gate benchmark artifacts for verifier
+  - `2655a97` — chore(advisor): update binary gate model from terminal-bench sweep
+- Reproducibility is fully in-repo:
   - `docs/advisor-binary-gate-benchmark-evidence-2026-05-30.md`
   - `docs/benchmark-evidence/binary-gate-eval-internal-old.json`
   - `docs/benchmark-evidence/binary-gate-eval-internal-new.json`
@@ -93,7 +97,11 @@ BINARY_GATE_MODEL_PATH=packages/advisor/assets/binary-gate-model.json npm run bi
   - `docs/benchmark-evidence/binary-gate-eval-merged-new.json`
   - `docs/benchmark-evidence/binary-gate-benchmark-internal-old.txt`
   - `docs/benchmark-evidence/binary-gate-benchmark-new.txt`
-- `data/routing/*` outputs remain git-ignored; those generated artifacts intentionally stay out of commits, but a verifiable copy is now committed.
-- Artifact hash changed in committed binary file:
-  - old `6cc4991ccc0704fcca6bae61b1e4445b2b8ffc843f8af24cbfc3937f339eedc1`
-  - new `1e5491eb4b571521d8fce3ca96384fd284a5f291ce0f62d4bc02dfd8b93a729d`
+- Current synced model hash:
+  - `1e5491eb4b571521d8fce3ca96384fd284a5f291ce0f62d4bc02dfd8b93a729d` (for both `data/routing/binary-gate-model.json` and `packages/advisor/assets/binary-gate-model.json`)
+- Baseline artifact hash used for comparison:
+  - `6cc4991ccc0704fcca6bae61b1e4445b2b8ffc843f8af24cbfc3937f339eedc1`
+- PR not created yet (per instruction to require explicit user approval before PR/merge).
+- To create the PR now:
+  - `git push origin HEAD`
+  - `gh pr create --title "chore(advisor): update binary-gate model from terminal-bench sweep" --body "See docs/advisor-binary-gate-benchmark-evidence-2026-05-30.md"`
