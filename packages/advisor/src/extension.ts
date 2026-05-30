@@ -267,9 +267,16 @@ function renderAdvisorHint(message: any, options: { expanded?: boolean }, theme:
   return box;
 }
 
-/** Extract readable text from message content (handles both string and content-block arrays) */
-function contentText(content: unknown): string {
+/** Extract readable text from message content (handles strings, blocks, and nested message payloads). */
+export function contentText(content: unknown): string {
   if (typeof content === "string") return content.trim();
+  if (content && typeof content === "object" && !Array.isArray(content)) {
+    const obj = content as Record<string, unknown>;
+    if (typeof obj.text === "string") return obj.text.trim();
+    if (obj.content !== undefined) return contentText(obj.content);
+    if (obj.message !== undefined) return contentText(obj.message);
+    return "";
+  }
   if (!Array.isArray(content)) return String(content ?? "").trim();
   const parts: string[] = [];
   for (const item of content) {
@@ -278,6 +285,14 @@ function contentText(content: unknown): string {
     const obj = item as Record<string, unknown>;
     if (obj.type === "text" && typeof obj.text === "string") parts.push(obj.text);
     else if (typeof obj.text === "string") parts.push(obj.text);
+    else if (obj.content !== undefined) {
+      const nested = contentText(obj.content);
+      if (nested) parts.push(nested);
+    }
+    else if (obj.message !== undefined) {
+      const nested = contentText(obj.message);
+      if (nested) parts.push(nested);
+    }
   }
   return parts.join("\n").replace(/\s+/g, " ").trim();
 }
@@ -592,15 +607,17 @@ async function doReview(pi: ExtensionAPI, ctx: any, trigger: string, delta: stri
   const gatePrediction = binaryGatePredict(reviewInput.text);
   let reviewRoute = reviewHeuristic;
   if (gatePrediction && gatePrediction.confidence >= 0.55 && !reviewHeuristic.safety) {
-    const binLabel = gatePrediction.decision === "continue" ? "continue" as const : "escalate_to_advisor" as const;
+    const gateContinues = gatePrediction.decision === "continue";
     reviewRoute = {
       ...reviewHeuristic,
+      label: gateContinues ? "abstain" : reviewHeuristic.label,
+      confidence: gatePrediction.confidence,
       source: "model",
-      reason: gatePrediction.decision === "continue"
+      reason: gateContinues
         ? "local gate predicts continue"
         : "local gate predicts review",
-      review: binLabel === "continue" ? "off" as const : reviewHeuristic.review,
-      escalate: binLabel === "escalate_to_advisor",
+      review: gateContinues ? "off" as const : reviewHeuristic.review,
+      escalate: gateContinues ? false : reviewHeuristic.escalate,
     };
   }
   appendRouteLog(reviewRoute);

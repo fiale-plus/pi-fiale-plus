@@ -4,6 +4,7 @@ import {
   buildAdvisorCheckinPrompt,
   completeWithHigherAdvisorModel,
   completeWithModelFallback,
+  contentText,
   normalizeAdvisorConfig,
   shouldRunCheckin,
   type AdvisorConfig,
@@ -76,6 +77,14 @@ describe("AdvisorConfig", () => {
     expect(parsed.checkins).toBe("off");
     expect(parsed.checkinIntervalMinutes).toBe(30);
     expect(parsed.model).toBe("claude-opus-4-6");
+  });
+});
+
+describe("advisor message extraction", () => {
+  it("extracts nested structured content without object string leakage", () => {
+    expect(contentText({ content: [{ type: "text", text: "done" }] })).toBe("done");
+    expect(contentText([{ type: "toolResult", content: [{ type: "text", text: "ok" }] }])).toBe("ok");
+    expect(contentText({ arbitrary: "shape" })).toBe("");
   });
 });
 
