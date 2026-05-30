@@ -95,6 +95,8 @@ BINARY_GATE_MODEL_PATH=docs/benchmark-evidence/binary-gate-model-updated.json np
 
 ### Verification trail
 - Commit history (latest-to-earliest):
+  - `49a4166` — docs(advisor): add merged control/weighted candidate comparison evidence
+  - `ae13bd9` — docs(advisor): pin full verification trail and PR creation steps
   - `0034b67` — docs(advisor): correct merged-bench metric figures
   - `50599b0` — docs(advisor): include merged terminal-bench gate eval evidence
   - `69a9f6d` — docs(advisor): persist binary-gate benchmark artifacts for verifier
@@ -109,6 +111,8 @@ BINARY_GATE_MODEL_PATH=docs/benchmark-evidence/binary-gate-model-updated.json np
   - `docs/benchmark-evidence/binary-gate-eval-core-small-new.json`
   - `docs/benchmark-evidence/binary-gate-eval-merged-old.json`
   - `docs/benchmark-evidence/binary-gate-eval-merged-new.json`
+  - `docs/benchmark-evidence/binary-gate-eval-bench-control-merged-alt.json`
+  - `docs/benchmark-evidence/binary-gate-eval-bench-weighted-merged-alt.json`
   - `docs/benchmark-evidence/binary-gate-benchmark-internal-old.txt`
   - `docs/benchmark-evidence/binary-gate-benchmark-new.txt`
 - Current synced model hash:
