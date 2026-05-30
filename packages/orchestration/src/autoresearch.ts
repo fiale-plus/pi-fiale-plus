@@ -3,7 +3,6 @@ import { activeGoal, clearGoal, setGoal, setGoalStatus } from "./goal.js";
 import { clearLoop, startLoop } from "./loop.js";
 import {
   DEFAULT_RESEARCH_INTERVAL,
-  clearResearchState,
   formatResearchState,
   label,
   readResearchState,
@@ -80,8 +79,7 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
           })}\n`);
         }
 
-        clearResearchState(ctx);
-        clearLoop(ctx);
+        clearLoop(ctx, { clearResearch: true, preserveCheckins: true });
         const clearedGoal = Boolean(previous.goal && activeGoal(ctx) === previous.goal);
         if (clearedGoal) {
           clearGoal(ctx);
@@ -106,32 +104,25 @@ function registerResearchCommand(pi: ExtensionAPI, commandName: ResearchKind): v
         })}\n`);
       }
 
-      clearResearchState(ctx);
-      clearLoop(ctx, { clearResearch: true });
-      if (activeGoal(ctx)) {
-        clearGoal(ctx);
-      }
-
       const goal = buildResearchGoal(commandName, instruction);
       const loopInstruction = buildResearchLoopInstruction(commandName, instruction);
       setGoal(ctx, goal);
       setGoalStatus(ctx, goal);
-      const loop = startLoop(pi, ctx, DEFAULT_RESEARCH_INTERVAL, loopInstruction, { triggerNow: true });
-      if (!loop) {
-        ctx.ui.notify(`${prefix} could not start: invalid loop interval.`, "error");
-        return;
-      }
-
       const next = writeResearchState(ctx, {
         kind: commandName,
         instruction,
         goal,
         loopInstruction,
-        interval: loop.interval,
+        interval: DEFAULT_RESEARCH_INTERVAL,
         cycles: 0,
         doneAttempts: 0,
         updatedAt: "",
       });
+      const loop = startLoop(pi, ctx, DEFAULT_RESEARCH_INTERVAL, loopInstruction, { triggerNow: true });
+      if (!loop) {
+        ctx.ui.notify(`${prefix} could not start: invalid loop interval.`, "error");
+        return;
+      }
       ctx.ui.notify(`${formatResearchState(next)}. First cycle queued now.`, "info");
     },
   });
