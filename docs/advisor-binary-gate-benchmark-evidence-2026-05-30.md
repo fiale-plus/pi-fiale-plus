@@ -51,11 +51,11 @@
 
 | metric | old | new |
 |---|---:|---:|
-| accuracy | 95.31% | 96.34% |
-| escalate precision | 0.9673 | 0.9500 |
-| escalate recall | 0.9344 | 0.9736 |
-| continue precision | 0.9407 | 0.9760 |
-| continue recall | 0.9706 | 0.9517 |
+| accuracy | 95.31% | 96.30% |
+| escalate precision | 0.9673 | 0.9501 |
+| escalate recall | 0.9344 | 0.9744 |
+| continue precision | 0.9407 | 0.9756 |
+| continue recall | 0.9706 | 0.9523 |
 
 ### Runtime benchmark (`npm run binary:benchmark`)
 - Old model evidence file: `docs/benchmark-evidence/binary-gate-benchmark-internal-old.txt`
